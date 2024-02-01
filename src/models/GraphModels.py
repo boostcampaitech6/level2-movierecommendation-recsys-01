@@ -1,0 +1,3 @@
+# graph models
+## LightGCN
+## NDCG
