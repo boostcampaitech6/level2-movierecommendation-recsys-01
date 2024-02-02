@@ -30,7 +30,7 @@
 # Implemented
 
 ## Models
-- S3Rec
+- DeepFM
 - ...
 
 ## Features
