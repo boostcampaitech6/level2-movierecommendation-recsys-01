@@ -119,10 +119,10 @@ def get_data():
 class FMDataset(Dataset):
     def __init__(self, data, train=False):
         super().__init__()
-        self.X = data['X'].values 
+        self.X = data['X'].values.astype(int)
         self.train = train
         if self.train:
-            self.y = data['y'].values
+            self.y = data['y'].values.astype(np.float32)
 
     def __len__(self):
         return self.X.shape[0]
