@@ -14,6 +14,7 @@ from easydict import EasyDict
 from src.data.datasets import (
     get_data, split_data, save_data, load_data, FMDataset)
 from src.trainer import Trainer
+from src.utils import set_seed
 
 import torch
 from torch.utils.data import DataLoader
@@ -29,9 +30,13 @@ def main():
         "epochs": 10,
         "emb_dim": 64,
         "lr": 0.001,
-        "optimizer": "adamw"
+        "optimizer": "adamw",
+        "seed": 42,
     })
     
+    # seed
+    set_seed(args.seed)
+
     if not os.path.exists(args.train_name):
         data = get_data()
         train_data, valid_data = split_data(data)
