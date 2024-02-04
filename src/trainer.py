@@ -40,7 +40,7 @@ class Trainer():
         for epoch in range(self.args.epochs):
             train_loss = self.train(train_data_loader)
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
-            print(f"epoch: {epoch+1} train_loss: {train_loss}, valid_loss: {valid_loss}, valid_ndcg: {valid_ndcg_k}, valid_recall_k: {valid_recall_k}")
+            print(f"epoch: {epoch+1} train_loss: {train_loss:.4f}, valid_loss: {valid_loss:.4f}, valid_ndcg: {valid_ndcg_k:.4f}, valid_recall_k: {valid_recall_k:.4f}")
     
     
     def train(self, train_data_loader):
