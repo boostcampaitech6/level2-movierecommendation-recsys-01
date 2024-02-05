@@ -1,5 +1,5 @@
 import math
-
+from tqdm import tqdm
 
 def precision_at_k(actual, predicted, topk):
     sum_precision = 0.0
@@ -13,12 +13,13 @@ def precision_at_k(actual, predicted, topk):
 
 
 def recall_at_k(actual, predicted, topk):
+    print("Calucate recall at k....")
     sum_recall = 0.0
     num_users = len(predicted)
     true_users = 0
-    for i in range(num_users):
-        act_set = set(actual[i])
-        pred_set = set(predicted[i][:topk])
+    for idx, user in enumerate(tqdm(range(num_users))):
+        act_set = set(actual[user])
+        pred_set = set(predicted[user][:topk])
         if len(act_set) != 0:
             sum_recall += len(act_set & pred_set) / float(len(act_set))
             true_users += 1
@@ -26,8 +27,9 @@ def recall_at_k(actual, predicted, topk):
 
 
 def ndcg_k(actual, predicted, topk):
+    print("Calucate ndcg at k....")
     res = 0
-    for user_id in range(len(actual)):
+    for user_id in tqdm(range(len(actual))):
         k = min(topk, len(actual[user_id]))
         idcg = idcg_k(k)
         dcg_k = sum(
@@ -47,3 +49,4 @@ def idcg_k(k):
         return 1.0
     else:
         return res
+    
