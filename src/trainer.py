@@ -11,6 +11,7 @@ import pandas as pd
 
 from tqdm import tqdm
 import torch
+
 from .models.DeepFMModels import DeepFM
 from .metrics import recall_at_k, ndcg_k
 
@@ -27,7 +28,10 @@ class Trainer():
         self.model.to(self.device)
         self.loss = torch.nn.BCELoss()
         self.cat_features_size = cat_features_size
-      
+        self.train_actual = None
+        self.valid_actual = None
+
+
     def get_model(self):
         return self.model
     
@@ -44,9 +48,12 @@ class Trainer():
     
     
     def train(self, train_data_loader):
+        print("Training Start....")
         self.model.train()
         total_loss = 0
-        for i, data in tqdm(enumerate(train_data_loader)):
+        total_X = []
+
+        for i, data in enumerate(tqdm(train_data_loader)):
             X, y = data['X'].to(self.device), data['y'].to(self.device)
             pred = self.model(X)
             batch_loss = self.loss(pred, y)
@@ -55,16 +62,25 @@ class Trainer():
             batch_loss.backward()
             self.optimizer.step()
             total_loss += batch_loss
+            total_X.append(data['X'])
         
         total_loss /= len(train_data_loader)
+
+        total_X = np.concatenate(total_X, axis=0)
+
+        if self.train_actual is None:
+            self.train_actual = self.actual_interaction_dict(total_X)
+
         return total_loss
             
         
     def validate(self, valid_data_loader):
+        print("Validating Start....")
         self.model.eval()
         valid_loss = 0
         total_X = []
-        for i, data in tqdm(enumerate(valid_data_loader)):
+
+        for _, data in enumerate(tqdm(valid_data_loader)):
             X, y = data['X'].to(self.device), data['y'].to(self.device)
             
             pred = self.model(X)
@@ -73,38 +89,45 @@ class Trainer():
 
             total_X.append(data['X'])
 
-        total_X = np.concatenate(total_X, axis=0)
-
-        valid_recall_k, valid_ndcg_k = self.evaluate(total_X)
-
         valid_loss /= len(valid_data_loader)
+
+        total_X = np.concatenate(total_X, axis=0)
+        if self.valid_actual is None:
+            self.valid_actual = self.actual_interaction_dict(total_X) # valid 평가시엔 valid actual로
+        valid_recall_k, valid_ndcg_k = self.evaluate()
 
         return valid_loss, valid_recall_k, valid_ndcg_k
     
     
-    # calcualte recall and ndcg
-    def evaluate(self, X, k=10):
+    # calculate recall and ndcg
+    def evaluate(self, k=10):
+        print("Evaluating Start....")
         self.model.eval()
         eval_recall_k = 0
         eval_ndcg_k = 0
 
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
-
-        actual = pd.DataFrame(X, columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict() # user별 사용한 item list
-
-        prediction = []
-        for user in tqdm(range(num_users)):
-            user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
-            user_pred = self.model(user_X).detach().cpu()
-            user_mask = torch.tensor([0 if item in actual[user] else 1 for item in range(num_items)], dtype=int)
-            
-            user_pred = user_pred.squeeze(1) * user_mask
         
-            user_pred = np.argsort(user_pred.numpy())[::-1]
+        prediction = []
+        print("Predict all users and items interaction....")
+        for _, user in enumerate(tqdm(range(num_users))):
+            user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
+            user_mask = torch.tensor([0 if item in self.train_actual[user] else 1 for item in range(num_items)], dtype=int)
+            
+            user_pred = self.model(user_X).detach().cpu()
+            user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
+            
+            user_pred = np.argpartition(user_pred.numpy(), -k)[-k:]
             prediction.append(user_pred)
 
-        eval_recall_k = recall_at_k(list(actual.values()), prediction, k)
-        eval_ndcg_k = ndcg_k(list(actual.values()), prediction, k)
+        assert len(prediction) == num_users, f"prediction's length should be same as num_users({num_users}): {len(prediction)}"
+
+        eval_recall_k = recall_at_k(list(self.valid_actual.values()), prediction, k)
+        eval_ndcg_k = ndcg_k(list(self.valid_actual.values()), prediction, k)
 
         return eval_recall_k, eval_ndcg_k
+
+
+    def actual_interaction_dict(self, X):
+        return pd.DataFrame(X, columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
