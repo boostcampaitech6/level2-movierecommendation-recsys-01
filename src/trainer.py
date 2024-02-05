@@ -92,6 +92,7 @@ class Trainer():
         valid_loss /= len(valid_data_loader)
 
         total_X = np.concatenate(total_X, axis=0)
+
         if self.valid_actual is None:
             self.valid_actual = self.actual_interaction_dict(total_X) # valid 평가시엔 valid actual로
         valid_recall_k, valid_ndcg_k = self.evaluate()
@@ -131,3 +132,32 @@ class Trainer():
 
     def actual_interaction_dict(self, X):
         return pd.DataFrame(X, columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
+
+    def inference(self, k=10):
+
+        print("Inference Start....")
+        self.model.eval()
+
+        num_users = self.cat_features_size['user']
+        num_items = self.cat_features_size['item']
+        prediction = []
+
+        print("Predict all users and items interaction....")
+        for _, user in enumerate(tqdm(range(num_users))):
+            user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
+            user_mask = torch.tensor([0 if (
+                item in self.train_actual[user]) or (item in self.valid_actual[user]) else 1 for item in range(num_items)], dtype=int)
+            
+            user_pred = self.model(user_X).detach().cpu()
+            user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
+            
+            user_pred = np.argpartition(user_pred.numpy(), -k)[-k:]
+            prediction.append(user_pred)
+        
+        # expand_dims
+        prediction = np.expand_dims(np.concatenate(prediction, axis=0), axis=-1)
+        user_ids = np.expand_dims(np.repeat(np.arange(num_users), 10), axis=-1)
+
+        prediction = np.concatenate([user_ids, prediction], axis=1)
+
+        return prediction
