@@ -40,9 +40,10 @@ def split_data(data):
     X_train, X_valid, y_train, y_valid = [],[],[],[]
     # unique user
     unique_users = data['X'].user.unique()
-    for user in tqdm(unique_users):
-        user_data = data['X'][data['X']['user'] == user]
-        user_y = data['y'].iloc[user_data.index,:]
+
+    for _, user_data in tqdm(data['X'].groupby('user')):
+        user_y = data['y'].iloc[user_data.index]
+
         user_data_train, user_data_valid, user_y_train, user_y_valid = \
                 train_test_split(user_data, user_y, test_size=.2,
                 stratify=user_y)
@@ -116,7 +117,7 @@ def get_data():
     unique_items = train_df.item.unique()
     neg_samples_df = neg_sampling(train_df, unique_items, num_negs)
 
-    train_df = pd.concat([train_df, neg_samples_df], axis=0)
+    train_df = pd.concat([train_df, neg_samples_df], axis=0).reset_index(drop=True)
 
     data = {
         'X': train_df.drop('rating', axis=1), # df
