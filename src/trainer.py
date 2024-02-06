@@ -24,6 +24,7 @@ class Trainer():
         self.device = torch.device("cuda")
         self.cat_features_size = cat_features_size
         self.runname = runname
+        self.best_model_name = None
 
         if self.args.model_name == "FM":
             self.model = FM(cat_features_size, self.args.emb_dim)
@@ -57,7 +58,8 @@ class Trainer():
             print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             if valid_loss < best_loss:
-                torch.save(self.model.state_dict(), f'{self.args.model_dir}/{self.runname}-{epoch}-t{train_loss:.4f}-v{valid_loss:.4f}-r{valid_recall_k:.4f}-n{valid_ndcg_k:.4f}.pt')
+                self.best_model_name = f'{self.args.model_dir}/{self.runname}-t{train_loss:.4f}-v{valid_loss:.4f}-r{valid_recall_k:.4f}-n{valid_ndcg_k:.4f}.pt'
+                torch.save(self.model.state_dict(), self.best_model_name) 
                 best_loss, best_epoch = valid_loss, epoch
                 endurance = 1
             else:
@@ -179,3 +181,6 @@ class Trainer():
         prediction = np.concatenate([user_ids, prediction], axis=1)
 
         return prediction
+
+    def load_best_model(self):
+        self.model.load_state_dict(torch.load(self.best_model_name))

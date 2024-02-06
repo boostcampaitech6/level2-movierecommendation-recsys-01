@@ -58,10 +58,13 @@ def main(args: DictConfig):
     trainer = Trainer(args, cat_features_size, runname)
     trainer.run(train_dataloader, valid_dataloader)
 
+    # Load Best Model
+    trainer.load_best_model()
+
     # Inference
     prediction = trainer.inference()
-    prediction = decode_data(oe, args, prediction)
-    save_submission(prediction, runname)
+    prediction = decode_data(oe, prediction)
+    save_submission(prediction, args, runname)
     
 if __name__ == '__main__':
     main()
