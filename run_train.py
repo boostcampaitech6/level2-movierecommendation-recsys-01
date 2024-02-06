@@ -10,7 +10,7 @@ run_train.py
 - evaluation
 '''
 import os
-from easydict import EasyDict
+#from easydict import EasyDict
 from src.data.datasets import (
     get_data, split_data, save_data, load_data, FMDataset,
     encode_data, decode_data, save_submission)
@@ -19,22 +19,11 @@ from src.utils import set_seed
 
 import torch
 from torch.utils.data import DataLoader
+import hydra
+from omegaconf import DictConfig
 
-
-def main():
-    # args 
-    args = EasyDict({
-        "train_name": 'train_data.pickle',
-        "valid_name": 'valid_data.pickle',
-        "batch_size": 2048,
-        "model_name": "DeepFM",
-        "epochs": 100,#0,
-        "emb_dim": 64,
-        "lr": 0.001,
-        "optimizer": "adamw",
-        "seed": 42,
-    })
-    
+@hydra.main(config_path="./src/configs", config_name="train_config", version_base='1.3')
+def main(args: DictConfig):
     # seed
     set_seed(args.seed)
 

@@ -1,1 +1,18 @@
-# train config
+# run config
+seed:       42
+epochs:     100
+batch_size: 2048
+lr:         0.001
+optimizer:  adamw
+
+# data config
+train_name: train_data.pickle
+valid_name: valid_data.pickle
+
+# model config
+model_name: DeepFM
+emb_dim:    64
+
+# wandb config
+wandb:      True # False
+project:    movierec
