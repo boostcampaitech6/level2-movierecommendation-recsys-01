@@ -6,6 +6,8 @@ trainer.py
 - train (only loss)
 - valid (metric)
 '''
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 
@@ -37,15 +39,27 @@ class Trainer():
     
        
     def run(self, train_data_loader, valid_data_loader):
+        patience = 10
+        best_loss, best_epoch, endurance = 1e+9, 0, 0
+
         if self.args.optimizer == "adamw":
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.args.lr)
         else:
             raise Exception
+
         for epoch in range(self.args.epochs):
             train_loss = self.train(train_data_loader)
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
-            print(f"epoch: {epoch+1} train_loss: {train_loss:.4f}, valid_loss: {valid_loss:.4f}, valid_ndcg: {valid_ndcg_k:.4f}, valid_recall_k: {valid_recall_k:.4f}")
-    
+            print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
+
+            if valid_loss < best_loss:
+                torch.save(model.state_dict(), 'best_model.pt')
+                best_loss, best_epoch = valid_loss, epoch
+                endurance = 1
+            else:
+                endurance += 1
+                if endurance >= patience:
+                    break
     
     def train(self, train_data_loader):
         print("Training Start....")
