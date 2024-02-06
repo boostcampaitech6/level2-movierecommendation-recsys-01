@@ -126,10 +126,10 @@ def get_data():
 
     return data
 
-def save_submission(prediction):
+def save_submission(prediction, args, runname):
     submission_df = pd.read_csv('../data/eval/sample_submission.csv')
     submission_df.iloc[:,:] = prediction
-    submission_df.to_csv('outputs/submission.csv', index=False)
+    submission_df.to_csv('{args.submit_dir}/{runname}-submission.csv', index=False)
 
 class FMDataset(Dataset):
     def __init__(self, data, train=False):

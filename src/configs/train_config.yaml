@@ -4,6 +4,8 @@ epochs:     100
 batch_size: 2048
 lr:         0.001
 optimizer:  adamw
+model_dir:  outputs/models
+submit_dir: outputs/submissions
 
 # data config
 train_name: train_data.pickle

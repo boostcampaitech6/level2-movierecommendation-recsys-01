@@ -18,9 +18,13 @@ from .models.DeepFMModels import DeepFM
 from .metrics import recall_at_k, ndcg_k
 
 class Trainer():
-    def __init__(self, args, cat_features_size) -> None:
-        self.device = torch.device("cuda")
+    def __init__(self, args, cat_features_size, runname) -> None:
+
         self.args = args
+        self.device = torch.device("cuda")
+        self.cat_features_size = cat_features_size
+        self.runname = runname
+
         if self.args.model_name == "FM":
             self.model = FM(cat_features_size, self.args.emb_dim)
         elif self.args.model_name == "DeepFM":
@@ -29,7 +33,7 @@ class Trainer():
             raise Exception
         self.model.to(self.device)
         self.loss = torch.nn.BCELoss()
-        self.cat_features_size = cat_features_size
+
         self.train_actual = None
         self.valid_actual = None
 
@@ -53,7 +57,7 @@ class Trainer():
             print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             if valid_loss < best_loss:
-                torch.save(model.state_dict(), 'best_model.pt')
+                torch.save(self.model.state_dict(), f'{self.args.model_dir}/{self.runname}-{epoch}-t{train_loss:.4f}-v{valid_loss:.4f}-r{valid_recall_k:.4f}-n{valid_ndcg_k:.4f}.pt')
                 best_loss, best_epoch = valid_loss, epoch
                 endurance = 1
             else:

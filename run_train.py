@@ -10,7 +10,7 @@ run_train.py
 - evaluation
 '''
 import os
-#from easydict import EasyDict
+from datetime import datetime as dt
 from src.data.datasets import (
     get_data, split_data, save_data, load_data, FMDataset,
     encode_data, decode_data, save_submission)
@@ -24,6 +24,10 @@ from omegaconf import DictConfig
 
 @hydra.main(config_path="./src/configs", config_name="train_config", version_base='1.3')
 def main(args: DictConfig):
+    # runname
+    now = dt.strftime(dt.now(), '%y%m%d-%H%M%S')
+    runname = f"{args.model_name}_{now}"
+
     # seed
     set_seed(args.seed)
 
@@ -51,13 +55,13 @@ def main(args: DictConfig):
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
     
     # Trainer 
-    trainer = Trainer(args, cat_features_size)
+    trainer = Trainer(args, cat_features_size, runname)
     trainer.run(train_dataloader, valid_dataloader)
 
     # Inference
     prediction = trainer.inference()
-    prediction = decode_data(oe, prediction)
-    save_submission(prediction)
+    prediction = decode_data(oe, args, prediction)
+    save_submission(prediction, runname)
     
 if __name__ == '__main__':
     main()
