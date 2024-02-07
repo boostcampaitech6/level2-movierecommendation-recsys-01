@@ -16,6 +16,7 @@ from tqdm import tqdm
 import torch
 
 from .models.DeepFMModels import DeepFM
+from .models.FMModels import FM
 from .metrics import recall_at_k, ndcg_k
 
 class Trainer():
@@ -102,7 +103,8 @@ class Trainer():
             self.optimizer.zero_grad()
             batch_loss.backward()
             self.optimizer.step()
-            total_loss += batch_loss
+
+            total_loss += batch_loss.item()
             total_X.append(data['X'])
         
         total_loss /= len(train_data_loader)
@@ -123,11 +125,10 @@ class Trainer():
 
         for _, data in enumerate(tqdm(valid_data_loader)):
             X, y = data['X'].to(self.device), data['y'].to(self.device)
-            
             pred = self.model(X)
             batch_loss = self.loss(pred, y)
-            valid_loss += batch_loss
 
+            valid_loss += batch_loss.item()
             total_X.append(data['X'])
 
         valid_loss /= len(valid_data_loader)
