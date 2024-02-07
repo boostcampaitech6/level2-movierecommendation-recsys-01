@@ -92,13 +92,13 @@ class DataPipeline:
 
     def encode_categorical_features(self, df, cat_features):
         if self.ordinal_encoder is None: # train-only
-            ordinal_encoder = OrdinalEncoder()
-            ordinal_encoder = ordinal_encoder.fit(df[cat_features])
+            self.ordinal_encoder = OrdinalEncoder()
+            self.ordinal_encoder = self.ordinal_encoder.fit(df[cat_features])
 
-        df[cat_features] = ordinal_encoder.transform(df[cat_features]).astype(int)
+        df[cat_features] = self.ordinal_encoder.transform(df[cat_features]).astype(int)
 
         self.cat_features_size = {cat_name: len(categories) for cat_name, categories in zip(
-            cat_features, ordinal_encoder.categories_)}
+            cat_features, self.ordinal_encoder.categories_)}
 
         return df
 
