@@ -17,6 +17,7 @@ def set_seed(seed):
     # unless you tell it to be deterministic
     torch.backends.cudnn.deterministic = True
 
+
 def create_data_path(args):
 
     # data_path
@@ -31,3 +32,9 @@ def create_data_path(args):
     valid_data_path = f'{data_path}/valid.pickle'
 
     return data_path, train_data_path, valid_data_path
+
+def save_submission(prediction, args, runname):
+    submission_df = pd.read_csv('../data/eval/sample_submission.csv')
+    submission_df.iloc[:,:] = prediction
+    submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)
+

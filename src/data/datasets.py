@@ -11,125 +11,129 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset
 
-def neg_sampling(train_df, unique_items, num_negs):
+class DataPipeline:
+
+    def __init__(self, args):
+        self.args = args
+        self.ordinal_encoder = None
+        self.cat_features_size = None
+
+    def _read_data(self):
+        print('read data...')
+        # read csv
+        path = '/data/ephemeral/data/train/train_ratings.csv'
+        df = pd.read_csv(path)
+        return df
+
+    def _neg_sampling(self, df):
+        print('negative sampling...')
+        '''
+        input: df (pos only)
+        return: df (pos + neg)
+        '''
+        # positive rating
+        df['rating'] = 1
+        unique_items = df.item.unique()
+        
+        # positive 파악
+        user_items = df.groupby('user').agg(pos_items=('item', set))
+
+        # positive 빼기
+        neg_items = user_items['pos_items'].apply(lambda x: set(unique_items)-x)
+
+        # sampling
+        user_items['neg_items'] = neg_items.apply(
+                lambda x: np.random.choice(list(x), size=self.args.neg_count))
+        print('done')
+        
+        # series to dataframe
+        # user, item
+        neg_samples_df = user_items.explode('neg_items')
+        neg_samples_df = neg_samples_df.drop(columns=['pos_items']).reset_index()
+        neg_samples_df = neg_samples_df.rename(columns={'neg_items': 'item'})
+        neg_samples_df['rating'] = 0
+
+        df = pd.concat([df, neg_samples_df], axis=0).reset_index(drop=True)
+
+        return df
     
-    # positive 파악
-    user_items = train_df.groupby('user').agg(pos_items=('item', set))
-
-    # positive 빼기
-    neg_items = user_items['pos_items'].apply(lambda x: set(unique_items)-x)
-
-    # sampling
-    print('negative sampling...')
-    user_items['neg_items'] = neg_items.apply(
-            lambda x: np.random.choice(list(x), size=num_negs))
-    print('done')
+    def _feature_engineering(self, df):
+        print('feature engineering...')
+        return df
     
-    # series to dataframe
-    # user, item
-    neg_samples_df = user_items.explode('neg_items')
-    neg_samples_df = neg_samples_df.drop(columns=['pos_items']).reset_index()
-    neg_samples_df = neg_samples_df.rename(columns={'neg_items': 'item'})
-    neg_samples_df['rating'] = 0
+    def _feature_selection(self, df):
+        print('feature selection...')
+        df = df[[key for key, value in self.args.feature_sets.items() if value == 1]+['rating']]
+        return df
 
-    return neg_samples_df
+    def _data_formatting(self, df):
+        print('data formatting...')
+        return {
+            'X': df.drop('rating', axis=1),
+            'y': df[['rating']],
+        }
+        
+    def preprocess_data(self):
+        df = self._read_data()
+        df = self._neg_sampling(df)
+        df = self._feature_engineering(df)
+        df = self._feature_selection(df)
+        data = self._data_formatting(df)
+        return data
 
-def split_data(data):
+    def save_data(self, data, data_name):
+        with open(data_name, 'wb') as f:
+            pickle.dump(data, f)
 
-    # split by user and y
-    X_train, X_valid, y_train, y_valid = [],[],[],[]
-    # unique user
-    unique_users = data['X'].user.unique()
+    def load_data(self, data_name):
+        with open(data_name, 'rb') as f:
+            data = pickle.load(f)
+        return data
 
-    for _, user_data in tqdm(data['X'].groupby('user')):
-        user_y = data['y'].iloc[user_data.index]
+    def encode_categorical_features(self, df, cat_features):
+        if self.ordinal_encoder is None: # train-only
+            ordinal_encoder = OrdinalEncoder()
+            ordinal_encoder = ordinal_encoder.fit(df[cat_features])
 
-        user_data_train, user_data_valid, user_y_train, user_y_valid = \
-                train_test_split(user_data, user_y, test_size=.2,
-                stratify=user_y)
+        df[cat_features] = ordinal_encoder.transform(df[cat_features]).astype(int)
 
-        X_train.append(user_data_train)
-        X_valid.append(user_data_valid)
-        y_train.append(user_y_train)
-        y_valid.append(user_y_valid)
-    
-    # concat
-    X_train, X_valid = pd.concat(X_train), pd.concat(X_valid)
-    y_train, y_valid = pd.concat(y_train), pd.concat(y_valid)
+        self.cat_features_size = {cat_name: len(categories) for cat_name, categories in zip(
+            cat_features, ordinal_encoder.categories_)}
 
-    train_data = {
-        'X': X_train,
-        'y': y_train,
-    }
+        return df
 
-    valid_data = {
-        'X': X_valid,
-        'y': y_valid,
-    }
+    def decode_categorical_features(self, array):
+        return self.ordinal_encoder.inverse_transform(array)
 
-    return train_data, valid_data
+    def split_data(self, data):
+        print('split data...')
+        # split by user and y
+        X_train, X_valid, y_train, y_valid = [],[],[],[]
 
-def save_data(data, data_name):
-    with open(data_name, 'wb') as f:
-        pickle.dump(data, f)
+        # unique user
+        unique_users = data['X'].user.unique()
 
-def load_data(data_name):
-    with open(data_name, 'rb') as f:
-        data = pickle.load(f)
-    return data
+        for _, user_data in tqdm(data['X'].groupby('user')):
+            user_y = data['y'].iloc[user_data.index]
 
+            user_data_train, user_data_valid, user_y_train, user_y_valid = \
+                    train_test_split(user_data, user_y, test_size=.2,
+                    stratify=user_y)
 
-def encode_data(categorical_df, train=False, ordinal_encoder=None):
-    # ordinal encoding
-    if train:
-        ordinal_encoder = OrdinalEncoder()
-        ordinal_encoder = ordinal_encoder.fit(categorical_df)
-    encoded = ordinal_encoder.transform(categorical_df)
+            X_train.append(user_data_train)
+            X_valid.append(user_data_valid)
+            y_train.append(user_y_train)
+            y_valid.append(user_y_valid)
+        
+        # concat
+        X_train, X_valid = pd.concat(X_train), pd.concat(X_valid)
+        y_train, y_valid = pd.concat(y_train), pd.concat(y_valid)
 
-    cat_features_size = {cat_name: len(categories) for cat_name, categories in zip(
-        categorical_df.columns, ordinal_encoder.categories_)}
+        train_data = {'X': X_train, 'y': y_train}
+        valid_data = {'X': X_valid, 'y': y_valid}
 
-    # astype
-    encoded = encoded.astype(int)
+        return train_data, valid_data
 
-    return encoded, ordinal_encoder, cat_features_size
-
-def decode_data(oe, encoded):
-    return oe.inverse_transform(encoded)
-
-def get_data():
-    # read csv
-    train_path = '/data/ephemeral/data/train/train_ratings.csv'
-    train_df = pd.read_csv(train_path)
-
-    # drop time
-    train_df = train_df.drop(columns=['time'])
-
-    # num users and items
-    num_users = train_df.user.nunique()
-    num_items = train_df.item.nunique()
-
-    # rating
-    train_df['rating'] = 1
-
-    # neg sample
-    num_negs = 50
-    unique_items = train_df.item.unique()
-    neg_samples_df = neg_sampling(train_df, unique_items, num_negs)
-
-    train_df = pd.concat([train_df, neg_samples_df], axis=0).reset_index(drop=True)
-
-    data = {
-        'X': train_df.drop('rating', axis=1), # df
-        'y': train_df[['rating']], # df
-    }
-
-    return data
-
-def save_submission(prediction, args, runname):
-    submission_df = pd.read_csv('../data/eval/sample_submission.csv')
-    submission_df.iloc[:,:] = prediction
-    submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)
 
 class FMDataset(Dataset):
     def __init__(self, data, train=False):

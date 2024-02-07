@@ -17,10 +17,10 @@ import hydra
 from omegaconf import DictConfig
 
 from src.data.datasets import (
-    get_data, split_data, save_data, load_data, FMDataset,
-    encode_data, decode_data, save_submission)
+    DataPipeline, FMDataset,
+    )
 from src.trainer import Trainer
-from src.utils import set_seed, create_data_path
+from src.utils import set_seed, create_data_path, save_submission
 
 import torch
 from torch.utils.data import DataLoader
@@ -39,22 +39,23 @@ def main(args: DictConfig):
 
     # create data_path
     data_path, train_path, valid_path = create_data_path(args)
+    data_pipeline = DataPipeline(args)
 
-    if not os.path.exists(data_path):
+    if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)):
         Path(data_path).mkdir(exist_ok=True, parents=True)
-        data = get_data()
-        train_data, valid_data = split_data(data)
+        data = data_pipeline.preprocess_data()
+        train_data, valid_data = data_pipeline.split_data(data)
 
-        save_data(train_data, train_path)
-        save_data(valid_data, valid_path)
+        data_pipeline.save_data(train_data, train_path)
+        data_pipeline.save_data(valid_data, valid_path)
     else:
-        train_data = load_data(train_path)
-        valid_data = load_data(valid_path)
+        train_data = data_pipeline.load_data(train_path)
+        valid_data = data_pipeline.load_data(valid_path)
 
     # ordinal encoding
     cat_features = ['user', 'item']
-    train_data['X'][cat_features], oe, cat_features_size = encode_data(train_data['X'][cat_features], train=True)
-    valid_data['X'][cat_features], _, _ = encode_data(valid_data['X'][cat_features], train=False, ordinal_encoder=oe)
+    train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
+    valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
     
     # dataset
     train_dataset = FMDataset(train_data, train=True)
@@ -65,7 +66,7 @@ def main(args: DictConfig):
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
     
     # Trainer 
-    trainer = Trainer(args, cat_features_size, runname)
+    trainer = Trainer(args, data_pipeline.cat_features_size, runname)
     trainer.run(train_dataloader, valid_dataloader)
 
     # Load Best Model
@@ -73,7 +74,7 @@ def main(args: DictConfig):
 
     # Inference
     prediction = trainer.inference()
-    prediction = decode_data(oe, prediction)
+    prediction = data_pipeline.decode_categorical_features(prediction)
     save_submission(prediction, args, runname)
     
 if __name__ == '__main__':
