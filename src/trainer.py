@@ -14,10 +14,12 @@ import pandas as pd
 
 from tqdm import tqdm
 import torch
+import wandb
 
 from .models.DeepFMModels import DeepFM
 from .models.FMModels import FM
 from .metrics import recall_at_k, ndcg_k
+
 
 class Trainer():
     def __init__(self, args, cat_features_size, runname) -> None:
@@ -51,7 +53,7 @@ class Trainer():
        
     def run(self, train_data_loader, valid_data_loader):
         patience = 10
-        best_loss, best_epoch, endurance = 1e+9, 0, 0
+        best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
 
         if self.args.optimizer == "adamw":
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.args.lr)
@@ -77,16 +79,39 @@ class Trainer():
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
             print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
+            # wandb logging
+            if self.args.wandb:
+                wandb.log(
+                    {
+                        'epoch': (epoch+1),
+                        'train_loss': train_loss,
+                        'valid_loss': valid_loss,
+                        'valid Recall@10': valid_recall_k,
+                        'valid nDCG@10': valid_ndcg_k,
+                    }
+                )
+            
             if valid_loss < best_loss:
-                best_loss, best_epoch = valid_loss, epoch
+                best_loss, best_epoch, best_ndcg_k, best_recall_k = valid_loss, epoch, valid_ndcg_k, valid_recall_k
                 endurance = 1
 
                 torch.save(self.model.state_dict(), f'{self.best_model_dir}/best_model.pt')
-                save_model_info(best_loss, best_epoch, train_loss, valid_recall_k, valid_ndcg_k)
+                save_model_info(best_loss, best_epoch, train_loss, best_recall_k, best_ndcg_k)
             else:
                 endurance += 1
                 if endurance >= patience:
                     break
+
+        # wandb logging
+        if self.args.wandb:
+            wandb.log(
+                {
+                    'best_epoch': (best_epoch+1),
+                    'best_loss': best_loss,
+                    'best Recall@10': best_recall_k,
+                    'best nDCG@10': best_ndcg_k,
+                }
+            )
 
     
     def train(self, train_data_loader):

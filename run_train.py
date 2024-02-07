@@ -12,6 +12,7 @@ run_train.py
 import os
 from pathlib import Path
 from datetime import datetime as dt
+import pytz as tz
 
 import hydra
 from omegaconf import DictConfig
@@ -25,14 +26,22 @@ from src.utils import set_seed, create_data_path, save_submission
 import torch
 from torch.utils.data import DataLoader
 
+import wandb
+
 @hydra.main(config_path="./src/configs", config_name="train_config", version_base='1.3')
 def main(args: DictConfig):
     # runname
-    now = dt.strftime(dt.now(), '%y%m%d-%H%M%S')
+    time_zone = tz.timezone('Asia/Seoul')
+    now = dt.strftime(dt.now(time_zone), '%y%m%d-%H%M%S')
     runname = f"{args.model_name}_{now}"
     Path(args.data_dir).mkdir(exist_ok=True, parents=True)
     Path(args.model_dir).mkdir(exist_ok=True, parents=True)
     Path(args.submit_dir).mkdir(exist_ok=True, parents=True)
+
+    # wandb init
+    if args.wandb:
+        print("wandb init...")
+        wandb.init(project=args.project, config=dict(args), name=runname)
 
     # seed
     set_seed(args.seed)
@@ -53,6 +62,7 @@ def main(args: DictConfig):
         valid_data = data_pipeline.load_data(valid_path)
 
     # ordinal encoding
+    # cat_features = [name for name, options in args.feature_sets.items() if options == (1, 'C')]
     cat_features = ['user', 'item']
     train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
     valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
