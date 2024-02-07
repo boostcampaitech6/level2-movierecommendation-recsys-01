@@ -10,7 +10,12 @@ run_train.py
 - evaluation
 '''
 import os
+from pathlib import Path
 from datetime import datetime as dt
+
+import hydra
+from omegaconf import DictConfig
+
 from src.data.datasets import (
     get_data, split_data, save_data, load_data, FMDataset,
     encode_data, decode_data, save_submission)
@@ -19,14 +24,14 @@ from src.utils import set_seed
 
 import torch
 from torch.utils.data import DataLoader
-import hydra
-from omegaconf import DictConfig
 
 @hydra.main(config_path="./src/configs", config_name="train_config", version_base='1.3')
 def main(args: DictConfig):
     # runname
     now = dt.strftime(dt.now(), '%y%m%d-%H%M%S')
     runname = f"{args.model_name}_{now}"
+    Path(args.model_dir).mkdir(exist_ok=True, parents=True)
+    Path(args.submit_dir).mkdir(exist_ok=True, parents=True)
 
     # seed
     set_seed(args.seed)

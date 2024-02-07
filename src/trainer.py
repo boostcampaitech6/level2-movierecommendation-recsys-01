@@ -6,6 +6,7 @@ trainer.py
 - train (only loss)
 - valid (metric)
 '''
+from pathlib import Path
 from copy import deepcopy
 
 import numpy as np
@@ -24,7 +25,11 @@ class Trainer():
         self.device = torch.device("cuda")
         self.cat_features_size = cat_features_size
         self.runname = runname
-        self.best_model_name = None
+
+        self.best_model_dir = f"{self.args.model_dir}/{runname}"
+        Path(self.best_model_dir).mkdir(exist_ok=True, parents=True)
+        # best model name: best_model.pt
+        # best model info: best_model_info.txt
 
         if self.args.model_name == "FM":
             self.model = FM(cat_features_size, self.args.emb_dim)
@@ -52,20 +57,36 @@ class Trainer():
         else:
             raise Exception
 
+        def save_model_info(best_loss, best_epoch, train_loss, valid_recall_k, valid_ndcg_k):
+            
+            info = f'''\
+            epoch:              {best_epoch}
+            train_loss:         {train_loss}
+            valid_loss:         {best_loss}
+            valid Recall@10:    {valid_recall_k}
+            valid nDCG@10:      {valid_ndcg_k}
+            '''
+
+            with open(f'{self.best_model_dir}/best_model_info.txt', 'w') as f:
+                f.write(info)
+            
+
         for epoch in range(self.args.epochs):
             train_loss = self.train(train_data_loader)
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
             print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             if valid_loss < best_loss:
-                self.best_model_name = f'{self.args.model_dir}/{self.runname}-t{train_loss:.4f}-v{valid_loss:.4f}-r{valid_recall_k:.4f}-n{valid_ndcg_k:.4f}.pt'
-                torch.save(self.model.state_dict(), self.best_model_name) 
                 best_loss, best_epoch = valid_loss, epoch
                 endurance = 1
+
+                torch.save(self.model.state_dict(), f'{self.best_model_dir}/best_model.pt')
+                save_model_info(best_loss, best_epoch, train_loss, valid_recall_k, valid_ndcg_k)
             else:
                 endurance += 1
                 if endurance >= patience:
                     break
+
     
     def train(self, train_data_loader):
         print("Training Start....")
@@ -183,4 +204,10 @@ class Trainer():
         return prediction
 
     def load_best_model(self):
-        self.model.load_state_dict(torch.load(self.best_model_name))
+        print('load best model...')
+        self.model.load_state_dict(torch.load(f'{self.best_model_dir}/best_model.pt'))
+
+        print('best model info...')
+        with open(f'{self.best_model_dir}/best_model_info.txt', 'r') as f:
+            info = f.readlines()
+        print(info)
