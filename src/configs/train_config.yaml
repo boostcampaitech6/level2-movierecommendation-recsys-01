@@ -1,15 +1,20 @@
 # run config
 seed:       42
-epochs:     100
-batch_size: 2048
+epochs:     1 #00
+batch_size: 64
 lr:         0.001
 optimizer:  adamw
 model_dir:  outputs/models
 submit_dir: outputs/submissions
+data_dir:   outputs/datasets
 
 # data config
-train_name: train_data.pickle
-valid_name: valid_data.pickle
+neg_count:  50
+feature_sets: {
+    'user':     1,
+    'item':     1,
+    'title':    0,
+}
 
 # model config
 model_name: DeepFM

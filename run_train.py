@@ -20,7 +20,7 @@ from src.data.datasets import (
     get_data, split_data, save_data, load_data, FMDataset,
     encode_data, decode_data, save_submission)
 from src.trainer import Trainer
-from src.utils import set_seed
+from src.utils import set_seed, create_data_path
 
 import torch
 from torch.utils.data import DataLoader
@@ -30,21 +30,26 @@ def main(args: DictConfig):
     # runname
     now = dt.strftime(dt.now(), '%y%m%d-%H%M%S')
     runname = f"{args.model_name}_{now}"
+    Path(args.data_dir).mkdir(exist_ok=True, parents=True)
     Path(args.model_dir).mkdir(exist_ok=True, parents=True)
     Path(args.submit_dir).mkdir(exist_ok=True, parents=True)
 
     # seed
     set_seed(args.seed)
 
-    if not os.path.exists(args.train_name):
+    # create data_path
+    data_path, train_path, valid_path = create_data_path(args)
+
+    if not os.path.exists(data_path):
+        Path(data_path).mkdir(exist_ok=True, parents=True)
         data = get_data()
         train_data, valid_data = split_data(data)
 
-        save_data(train_data, args.train_name)
-        save_data(valid_data, args.valid_name)
+        save_data(train_data, train_path)
+        save_data(valid_data, valid_path)
     else:
-        train_data = load_data(args.train_name)
-        valid_data = load_data(args.valid_name)
+        train_data = load_data(train_path)
+        valid_data = load_data(valid_path)
 
     # ordinal encoding
     cat_features = ['user', 'item']
