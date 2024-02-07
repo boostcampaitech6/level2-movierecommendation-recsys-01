@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 
@@ -40,13 +42,14 @@ class FM(nn.Module):
         
         self.emb_dim = emb_dim
         self.cat_features_size = cat_features_size
-        self.input_dim = len(self.cat_features_size) * self.emb_dim 
+        self.input_dim = sum(self.cat_features_size.values())
         
-        self.embs = [nn.Embedding(feature_size, self.emb_dim) for cat_name, feature_size in self.cat_features_size.items()]
+        self.bias = nn.ModuleList([
+            nn.Embedding(feature_size, 1) for cat_name, feature_size in self.cat_features_size.items()])
+
         self.fm = FMLayer(self.input_dim, self.emb_dim) 
 
         self._initialize_weights()
-
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -54,7 +57,6 @@ class FM(nn.Module):
                 nn.init.normal_(m.weight, 0, 0.01)
             elif isinstance(m, FMLayer):
                 nn.init.normal_(m.v, 0, 0.01)
-
 
     def forward(self, x):
         '''
@@ -64,9 +66,17 @@ class FM(nn.Module):
         Return
             y: Float tensor of size "(batch_size)"
         '''
-        embs = [emb(x[:,idx]) for idx, emb in enumerate(self.embs)]
-        # [batch, input, emb] -> [batch, emb * input]
-        embs = torch.concat(embs, axis=-1)
-        y = embs.squeeze(1) + self.fm(x)
+        # global bias
+        bias = [emb(x[:,idx]) for idx, emb in enumerate(self.bias)] # u_bias, i_bias
+        bias = torch.concat(bias, axis=-1)
+        bias_term = torch.sum(bias, axis=1)
 
-        return y
+        # add offsets
+        x = x + x.new_tensor([0, *np.cumsum(self.cat_features_size.values())[:-1]])
+        # one-hot transformation
+        x_fm = torch.zeros(x.size(0), sum(self.cat_features_size.values()), device=x.device).scatter_(1, x, 1.)
+        # concat results
+        y = bias_term + self.fm(x_fm)
+        y = torch.sigmoid(y)
+
+        return y.unsqueeze(-1)

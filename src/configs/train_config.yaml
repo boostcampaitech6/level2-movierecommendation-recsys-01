@@ -1,6 +1,6 @@
 # run config
 seed:       42
-epochs:     1 #00
+epochs:     100
 batch_size: 64
 lr:         0.001
 optimizer:  adamw
@@ -17,7 +17,7 @@ feature_sets: {
 }
 
 # model config
-model_name: DeepFM
+model_name: FM #DeepFM
 emb_dim:    64
 
 # wandb config
