@@ -1,0 +1,18 @@
+# run config
+seed:       42
+runname:    FM_240208-143255
+model_dir:  outputs/models
+submit_dir: outputs/submissions
+data_dir:   outputs/datasets
+
+# data config
+neg_count:  50
+feature_sets: {
+    'user':     1,
+    'item':     1,
+    'title':    0,
+}
+
+# model config
+model_name: FM #DeepFM
+emb_dim:    64
