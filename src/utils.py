@@ -23,7 +23,7 @@ def set_seed(seed):
 def create_data_path(args):
 
     # data_path
-    feature_bit = ''.join([str(value) for value in args.feature_sets.values()])
+    feature_bit = ''.join([str(value[0]) for value in args.feature_sets.values()])
     # Remove trailing zeros from the feature bit string to ensure consistent feature set recognition
     # regardless of the feature list size. This normalization step prevents different interpretations
     # of the same feature set due to varying lengths of trailing zeros.

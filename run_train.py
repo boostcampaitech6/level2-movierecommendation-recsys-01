@@ -50,7 +50,7 @@ def main(args: DictConfig):
     data_path, train_path, valid_path = create_data_path(args)
     data_pipeline = DataPipeline(args)
 
-    if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)):
+    if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)) or args.data_rebuild:
         Path(data_path).mkdir(exist_ok=True, parents=True)
         data = data_pipeline.preprocess_data()
         train_data, valid_data = data_pipeline.split_data(data)
@@ -62,8 +62,8 @@ def main(args: DictConfig):
         valid_data = data_pipeline.load_data(valid_path)
 
     # ordinal encoding
-    # cat_features = [name for name, options in args.feature_sets.items() if options == (1, 'C')]
-    cat_features = ['user', 'item']
+    cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
+    # cat_features = ['user', 'item']
     train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
     valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
     
