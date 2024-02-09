@@ -69,7 +69,7 @@ class BertDataloader(AbstractDataloader):
 
     def _get_sub_loader(self):
         batch_size = self.args.test_batch_size
-        dataset = self._get_eval(dataset('test'))
+        dataset = BertEvalDataset(self.train, answers, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, mode='sub')
         dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,suffle=False,pin_memory=True)
 
 
@@ -125,25 +125,28 @@ class BertTrainDataset(data_utils.Dataset):
 
 
 class BertEvalDataset(data_utils.Dataset):
-    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, model='eval'):
+    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, mode='eval'):
         self.u2seq = u2seq
         self.users = sorted(self.u2seq.keys())
         self.u2answer = u2answer
         self.max_len = max_len
         self.mask_token = mask_token
         self.negative_samples = negative_samples
-
+        self.mode = mode
+        #print(self.u2seq.keys())
+        self.user_dict = {idx: key for idx, key in enumerate(self.u2seq.keys())}
+        #print(user_dict)
     def __len__(self):
         return len(self.users)
 
     def __getitem__(self, index):
-        user = self.users[index]
+        user = self.users[self.user_dict[index]]
         seq = self.u2seq[user]
         answer = self.u2answer[user]
         negs = self.negative_samples[user]
 
         candidates = answer + negs
-        if mode=='sub': candidates = negs
+        if self.mode=='sub': candidates = negs
         labels = [1] * len(answer) + [0] * len(negs)
 
         seq = seq + [self.mask_token]
@@ -151,5 +154,5 @@ class BertEvalDataset(data_utils.Dataset):
         padding_len = self.max_len - len(seq)
         seq = [0] * padding_len + seq
 
-        return torch.LongTensor(seq), torch.LongTensor(candidates), torch.LongTensor(labels)
+        return user,torch.LongTensor(seq), torch.LongTensor(candidates), torch.LongTensor(labels)
 

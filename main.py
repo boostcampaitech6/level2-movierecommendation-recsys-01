@@ -1,5 +1,5 @@
 import torch
-
+import pandas as pd
 from options import args
 from models import model_factory
 from dataloaders import dataloader_factory, loader_submission
@@ -22,8 +22,21 @@ def train():
     inference_model = (input('Inference model? y/[n]: ')=='y')
     if inference_model:
         preds = trainer.submission(inv_umap, inv_smap)
-        #generate_submission_file(args.data_file, preds)
+        print(preds)
+        # Flatten the dictionary values
+        # Create an empty list to store the flattened data
+        flattened_data = []
 
+        # Iterate over each key-value pair
+        for key, values in preds.items():
+        # Iterate over each value in the nested array
+            for value in values:
+                flattened_data.append((key, value))
+        
+        print(flattened_data)
+        # Construct DataFrame
+        df = pd.DataFrame(data=flattened_data)
+        df.to_csv('out.csv', index=False)
 
 if __name__ == '__main__':
     if args.mode == 'train':

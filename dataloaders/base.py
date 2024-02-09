@@ -15,7 +15,7 @@ class AbstractDataloader(metaclass=ABCMeta):
         self.umap = dataset['umap']
         self.smap = dataset['smap']
         self.inv_umap = dataset['inv_umap']
-        self.inv_samp = dataset['inv_umap']
+        self.inv_smap = dataset['inv_smap']
         self.user_count = len(self.umap)
         self.item_count = len(self.smap)
 

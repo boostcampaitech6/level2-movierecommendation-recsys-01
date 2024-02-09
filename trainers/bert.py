@@ -32,7 +32,7 @@ class BERTTrainer(AbstractTrainer):
         return loss
 
     def calculate_metrics(self, batch):
-        seqs, candidates, labels = batch
+        user, seqs, candidates, labels = batch
         scores = self.model(seqs)  # B x T x V
         scores = scores[:, -1, :]  # B x V
         scores = scores.gather(1, candidates)  # B x C

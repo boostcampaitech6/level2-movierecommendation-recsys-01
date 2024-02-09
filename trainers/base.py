@@ -196,7 +196,7 @@ class AbstractTrainer(metaclass=ABCMeta):
                 json.dump(average_metrics, f, indent=4)
             print(average_metrics)
 
-    def submission(self):
+    def submission(self, inv_umap, inv_smap):
         print("Make sumbission!")
         best_model = torch.load(os.path.join(self.export_root, 'models', 'best_acc_model.pth')).get('model_state_dict')
         self.model.load_state_dict(best_model)
@@ -217,8 +217,9 @@ class AbstractTrainer(metaclass=ABCMeta):
                 rank = (-scores).argsort(dim=1)
                 cut = rank[:, :10]
 
-            for i in index:
-                pred_list[i.item()] = tuple(cut.cpu().numpy())
+                for i in index:
+                    cut = [inv_smap(x) for x in cut.values()]
+                    pred_list[inv_umap(i.item())] = tuple(cut.cpu().numpy())
                      
         return pred_list
 
