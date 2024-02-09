@@ -71,13 +71,16 @@ class AbstractDataset(metaclass=ABCMeta):
         df = self.load_ratings_df()
         df = self.make_implicit(df)
         df = self.filter_triplets(df)
-        df, umap, smap = self.densify_index(df)
+        df, umap, smap, inv_umap, inv_smap = self.densify_index(df)
         train, val, test = self.split_df(df, len(umap))
         dataset = {'train': train,
                    'val': val,
                    'test': test,
                    'umap': umap,
-                   'smap': smap}
+                   'smap': smap,
+                   'inv_umap':inv_umap,
+                   'inv_smap':inv_smap,
+                   }
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)
 
@@ -136,9 +139,12 @@ class AbstractDataset(metaclass=ABCMeta):
         print('Densifying index')
         umap = {u: i for i, u in enumerate(set(df['uid']))}
         smap = {s: i for i, s in enumerate(set(df['sid']))}
+        inv_umap = {i: u for i, u in enumerate(set(df['uid']))}
+        inv_smap = {i: s for i, s in enumerate(set(df['sid']))}
+
         df['uid'] = df['uid'].map(umap)
         df['sid'] = df['sid'].map(smap)
-        return df, umap, smap
+        return df, umap, smap, inv_umap, inv_smap
 
     def split_df(self, df, user_count):
         if self.args.split == 'leave_one_out':
@@ -146,7 +152,7 @@ class AbstractDataset(metaclass=ABCMeta):
             user_group = df.groupby('uid')
             user2items = user_group.progress_apply(lambda d: list(d.sort_values(by='timestamp')['sid']))
             train, val, test = {}, {}, {}
-            for user in range(user_count):
+            for user, group in user_group:
                 items = user2items[user]
                 train[user], val[user], test[user] = items[:-2], items[-2:-1], items[-1:]
             return train, val, test

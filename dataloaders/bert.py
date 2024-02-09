@@ -67,6 +67,11 @@ class BertDataloader(AbstractDataloader):
         dataset = BertEvalDataset(self.train, answers, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples)
         return dataset
 
+    def _get_sub_loader(self):
+        batch_size = self.args.test_batch_size
+        dataset = self._get_eval(dataset('test'))
+        dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,suffle=False,pin_memory=True)
+
 
 class BertTrainDataset(data_utils.Dataset):
     def __init__(self, u2seq, max_len, mask_prob, mask_token, num_items, rng):
@@ -120,7 +125,7 @@ class BertTrainDataset(data_utils.Dataset):
 
 
 class BertEvalDataset(data_utils.Dataset):
-    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples):
+    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, model='eval'):
         self.u2seq = u2seq
         self.users = sorted(self.u2seq.keys())
         self.u2answer = u2answer
@@ -138,6 +143,7 @@ class BertEvalDataset(data_utils.Dataset):
         negs = self.negative_samples[user]
 
         candidates = answer + negs
+        if mode=='sub': candidates = negs
         labels = [1] * len(answer) + [0] * len(negs)
 
         seq = seq + [self.mask_token]

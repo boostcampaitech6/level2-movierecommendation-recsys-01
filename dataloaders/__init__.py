@@ -15,3 +15,11 @@ def dataloader_factory(args):
     dataloader = dataloader(args, dataset)
     train, val, test = dataloader.get_pytorch_dataloaders()
     return train, val, test
+
+def loader_submission(args):
+    dataset = dataset_factory(args)
+    dataloader = DATALOADERS[args.dataloader_code]
+    dataloader = dataloader(args, dataset)
+    inv_umap, inv_samp = dataloader.get_umap_smap()
+    return inv_umap, inv_samp
+    

@@ -202,23 +202,25 @@ class AbstractTrainer(metaclass=ABCMeta):
         self.model.load_state_dict(best_model)
         self.model.eval()
 
-        prd_list = None
+        pred_list ={}
         answer_list = None
         average_meter_set = AverageMeterSet()
 
         with torch.no_grad():
-            #tqdm_dataloader = tqdm(self.submission_dataloader)
-    
-            batch = [x.to(self.device) for x in batch]
-                
-            seqs, candidates, labels = batch
-            scores = self.model(seqs)  # B x T x V
-            scores = scores[:, -1, :]  # B x V
-            scores = scores.gather(1, candidates)  # B x C
-            rank = (-scores).argsort(dim=1)
-            cut = rank[:, :10]
-         
-        return preds
+            tqdm_dataloader = tqdm(self.test_loader)
+            for batch_idx, batch in enumerate(tqdm_dataloader):
+                batch = [x.to(self.device) for x in batch]
+                index, seqs, candidates, labels = batch
+                scores = self.model(seqs)  # B x T x V
+                scores = scores[:, -1, :]  # B x V
+                scores = scores.gather(1, candidates)  # B x C
+                rank = (-scores).argsort(dim=1)
+                cut = rank[:, :10]
+
+            for i in index:
+                pred_list[i.item()] = tuple(cut.cpu().numpy())
+                     
+        return pred_list
 
     def _create_optimizer(self):
         args = self.args

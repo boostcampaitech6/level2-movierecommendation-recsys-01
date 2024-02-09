@@ -32,13 +32,13 @@ class ML2MDataset(AbstractDataset):
         return False
 
     def load_ratings_df(self):
-        #breakpoint()
         folder_path = self._get_rawdata_folder_path()
         print(folder_path)
-        file_path = folder_path.joinpath('data','train','train_ratings.csv')
+        file_path = folder_path.joinpath('train_ratings.csv')
         print(file_path)
         df = pd.read_csv(file_path, header=None)
         df.columns = ['uid', 'sid','timestamp']
+        df=df[1:]
         return df
 
 
