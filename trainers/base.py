@@ -201,7 +201,7 @@ class AbstractTrainer(metaclass=ABCMeta):
         best_model = torch.load(os.path.join(self.export_root, 'models', 'best_acc_model.pth')).get('model_state_dict')
         self.model.load_state_dict(best_model)
         self.model.eval()
-
+        #print(inv_umap, inv_smap)
         pred_list ={}
         answer_list = None
         average_meter_set = AverageMeterSet()
@@ -216,10 +216,14 @@ class AbstractTrainer(metaclass=ABCMeta):
                 scores = scores.gather(1, candidates)  # B x C
                 rank = (-scores).argsort(dim=1)
                 cut = rank[:, :10]
-
+                # breakpoint()
+                print(cut)
                 for i in index:
-                    cut = [inv_smap(x) for x in cut.values()]
-                    pred_list[inv_umap(i.item())] = tuple(cut.cpu().numpy())
+                    item = []
+                    for x in cut:
+                        x = x.detach().cpu().numpy()
+                        item.append(inv_smap[str(s)] for s in tuple(x))
+                        pred_list[inv_umap[i.item()]] = item
                      
         return pred_list
 
