@@ -44,7 +44,6 @@ class DataPipeline:
         # sampling
         user_items['neg_items'] = neg_items.apply(
                 lambda x: np.random.choice(list(x), size=self.args.neg_count))
-        print('done')
         
         # series to dataframe
         # user, item
@@ -63,7 +62,7 @@ class DataPipeline:
     
     def _feature_selection(self, df):
         print('feature selection...')
-        df = df[[key for key, value in self.args.feature_sets.items() if value == 1]+['rating']]
+        df = df[[key for key, value in self.args.feature_sets.items() if value[0] == 1]+['rating']]
         return df
 
     def _data_formatting(self, df):
@@ -109,9 +108,6 @@ class DataPipeline:
         print('split data...')
         # split by user and y
         X_train, X_valid, y_train, y_valid = [],[],[],[]
-
-        # unique user
-        unique_users = data['X'].user.unique()
 
         for _, user_data in tqdm(data['X'].groupby('user')):
             user_y = data['y'].iloc[user_data.index]
