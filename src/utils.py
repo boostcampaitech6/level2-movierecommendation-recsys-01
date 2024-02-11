@@ -7,8 +7,12 @@ import pandas as pd
 
 import torch
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def set_seed(seed):
+    logger.info("seed setting...")
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
@@ -21,7 +25,7 @@ def set_seed(seed):
 
 
 def create_data_path(args):
-
+    logger.info("create data path...")
     # data_path
     feature_bit = ''.join([str(value[0]) for value in args.feature_sets.values()])
     # Remove trailing zeros from the feature bit string to ensure consistent feature set recognition
@@ -35,7 +39,9 @@ def create_data_path(args):
 
     return data_path, train_data_path, valid_data_path
 
+
 def save_submission(prediction, args, runname):
+    logger.info("save submission file...")
     submission_df = pd.read_csv('../data/eval/sample_submission.csv')
     submission_df.iloc[:,:] = prediction
     submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)

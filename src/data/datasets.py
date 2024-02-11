@@ -11,6 +11,9 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset
 
+import logging
+logger = logging.getLogger(__name__)
+
 class DataPipeline:
 
     def __init__(self, args):
@@ -19,14 +22,14 @@ class DataPipeline:
         self.cat_features_size = None
 
     def _read_data(self):
-        print('read data...')
+        logger.info('read data...')
         # read csv
         path = '/data/ephemeral/data/train/train_ratings.csv'
         df = pd.read_csv(path)
         return df
 
     def _neg_sampling(self, df):
-        print('negative sampling...')
+        logger.info('negative sampling...')
         '''
         input: df (pos only)
         return: df (pos + neg)
@@ -57,22 +60,23 @@ class DataPipeline:
         return df
     
     def _feature_engineering(self, df):
-        print('feature engineering...')
+        logger.info('feature engineering...')
         return df
     
     def _feature_selection(self, df):
-        print('feature selection...')
+        logger.info('feature selection...')
         df = df[[key for key, value in self.args.feature_sets.items() if value[0] == 1]+['rating']]
         return df
 
     def _data_formatting(self, df):
-        print('data formatting...')
+        logger.info('data formatting...')
         return {
             'X': df.drop('rating', axis=1),
             'y': df[['rating']],
         }
         
     def preprocess_data(self):
+        logger.info("preprocess data...")
         df = self._read_data()
         df = self._neg_sampling(df)
         df = self._feature_engineering(df)
@@ -85,15 +89,18 @@ class DataPipeline:
             pickle.dump(data, f)
 
     def load_data(self, data_name):
+        logger.info("load data files...")
         with open(data_name, 'rb') as f:
             data = pickle.load(f)
         return data
 
     def encode_categorical_features(self, df, cat_features):
         if self.ordinal_encoder is None: # train-only
+            logger.info("[Train] make ordinal encoder and fit...")
             self.ordinal_encoder = OrdinalEncoder()
             self.ordinal_encoder = self.ordinal_encoder.fit(df[cat_features])
 
+        logger.info("transform features...")
         df[cat_features] = self.ordinal_encoder.transform(df[cat_features]).astype(int)
 
         self.cat_features_size = {cat_name: len(categories) for cat_name, categories in zip(
@@ -105,7 +112,7 @@ class DataPipeline:
         return self.ordinal_encoder.inverse_transform(array)
 
     def split_data(self, data):
-        print('split data...')
+        logger.info('split data...')
         # split by user and y
         X_train, X_valid, y_train, y_valid = [],[],[],[]
 

@@ -20,6 +20,8 @@ from .models.DeepFMModels import DeepFM
 from .models.FMModels import FM
 from .metrics import recall_at_k, ndcg_k
 
+import logging
+logger = logging.getLogger(__name__)
 
 class Trainer():
     def __init__(self, args, cat_features_size, runname) -> None:
@@ -52,12 +54,14 @@ class Trainer():
     
        
     def run(self, train_data_loader, valid_data_loader):
+        logger.info("Run Trainer...")
         patience = 10
         best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
 
         if self.args.optimizer == "adamw":
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.args.lr)
         else:
+            logger.error(f"Optimizer Not Exists: {self.args.optimizer}")
             raise Exception
 
         def save_model_info(best_loss, best_epoch, train_loss, valid_recall_k, valid_ndcg_k):
@@ -77,7 +81,7 @@ class Trainer():
         for epoch in range(self.args.epochs):
             train_loss = self.train(train_data_loader)
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
-            print(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
+            logger.info(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             # wandb logging
             if self.args.wandb:
@@ -115,7 +119,7 @@ class Trainer():
 
     
     def train(self, train_data_loader):
-        print("Training Start....")
+        logger.info("Training Start....")
         self.model.train()
         total_loss = 0
         total_X = []
@@ -143,7 +147,7 @@ class Trainer():
             
         
     def validate(self, valid_data_loader):
-        print("Validating Start....")
+        logger.info("Start Validating....")
         self.model.eval()
         valid_loss = 0
         total_X = []
@@ -169,7 +173,7 @@ class Trainer():
     
     # calculate recall and ndcg
     def evaluate(self, k=10):
-        print("Evaluating Start....")
+        logger.info("Start Evaluating....")
         self.model.eval()
         eval_recall_k = 0
         eval_ndcg_k = 0
@@ -178,7 +182,7 @@ class Trainer():
         num_items = self.cat_features_size['item']
         
         prediction = []
-        print("Predict all users and items interaction....")
+        logger.info("Predict all users and items interaction....")
         for _, user in enumerate(tqdm(range(num_users))):
             user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
             user_mask = torch.tensor([0 if item in self.train_actual[user] else 1 for item in range(num_items)], dtype=int)
@@ -201,15 +205,14 @@ class Trainer():
         return pd.DataFrame(X, columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
 
     def inference(self, k=10):
-
-        print("Inference Start....")
+        logger.info("Inference Start....")
         self.model.eval()
 
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
         prediction = []
 
-        print("Predict all users and items interaction....")
+        logger.info("Predict all users and items interaction....")
         for _, user in enumerate(tqdm(range(num_users))):
             user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
             user_mask = torch.tensor([0 if (
@@ -230,10 +233,10 @@ class Trainer():
         return prediction
 
     def load_best_model(self):
-        print('load best model...')
+        logger.info('load best model...')
         self.model.load_state_dict(torch.load(f'{self.best_model_dir}/best_model.pt'))
 
-        print('best model info...')
+        logger.info('best model info...')
         with open(f'{self.best_model_dir}/best_model_info.txt', 'r') as f:
             info = f.readlines()
-        print(info)
+        logger.info(info)
