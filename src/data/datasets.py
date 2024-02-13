@@ -5,7 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 
 import torch
@@ -14,11 +14,16 @@ from torch.utils.data import Dataset
 import logging
 logger = logging.getLogger(__name__)
 
+from .features import (
+    make_writer, make_director, make_genre, make_title, make_year
+)
+
 class DataPipeline:
 
     def __init__(self, args):
         self.args = args
         self.ordinal_encoder = None
+        self.num_features = None
         self.cat_features_size = None
 
     def _read_data(self):
@@ -61,11 +66,20 @@ class DataPipeline:
     
     def _feature_engineering(self, df):
         logger.info('feature engineering...')
+        make_year(df)
+        make_director(df)
+        make_genre(df)
+        make_title(df)
+        make_writer(df)
         return df
     
     def _feature_selection(self, df):
         logger.info('feature selection...')
-        df = df[[key for key, value in self.args.feature_sets.items() if value[0] == 1]+['rating']]
+        # ordering to con_features | cat_features
+        num_features = [key for key, value in self.args.feature_sets.items() if value == [1, 'N']]
+        cat_features = [key for key, value in self.args.feature_sets.items() if value == [1, 'C']]
+        rating = ['rating']
+        df = df[num_features + cat_features + rating]
         return df
 
     def _data_formatting(self, df):
@@ -99,6 +113,7 @@ class DataPipeline:
             logger.info("[Train] make ordinal encoder and fit...")
             self.ordinal_encoder = OrdinalEncoder()
             self.ordinal_encoder = self.ordinal_encoder.fit(df[cat_features])
+            self.cat_features = cat_features
 
         logger.info("transform features...")
         df[cat_features] = self.ordinal_encoder.transform(df[cat_features]).astype(int)
@@ -110,6 +125,18 @@ class DataPipeline:
 
     def decode_categorical_features(self, array):
         return self.ordinal_encoder.inverse_transform(array)
+    
+    def scale_numeric_features(self, df, num_features):
+        logger.info("scaling features...")
+        self.num_features = num_features
+        if len(num_features) == 0:
+            logger.info("no numeric features...")
+            return df
+        
+        scaler = StandardScaler()
+        df[num_features] = scaler.fit_transform(df[num_features])
+
+        return df
 
     def split_data(self, data):
         logger.info('split data...')

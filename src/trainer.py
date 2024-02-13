@@ -19,16 +19,20 @@ import wandb
 from .models.DeepFMModels import DeepFM
 from .models.FMModels import FM
 from .metrics import recall_at_k, ndcg_k
+from .data.features import make_year
 
 import logging
 logger = logging.getLogger(__name__)
 
+
 class Trainer():
-    def __init__(self, args, cat_features_size, runname) -> None:
+    def __init__(self, args, data_pipeline, runname) -> None:
 
         self.args = args
-        self.device = torch.device("cuda")
-        self.cat_features_size = cat_features_size
+        self.device = torch.device(self.args.device)
+        self.data_pipeline = data_pipeline
+        self.num_features = self.data_pipeline.num_features
+        self.cat_features_size = self.data_pipeline.cat_features_size
         self.runname = runname
 
         self.best_model_dir = f"{self.args.model_dir}/{runname}"
@@ -37,9 +41,9 @@ class Trainer():
         # best model info: best_model_info.txt
 
         if self.args.model_name == "FM":
-            self.model = FM(cat_features_size, self.args.emb_dim)
+            self.model = FM(self.num_features, self.cat_features_size, self.args.emb_dim)
         elif self.args.model_name == "DeepFM":
-            self.model = DeepFM(cat_features_size, self.args.emb_dim, mlp_dims=[200, 200, 200], drop_rate=0.1)
+            self.model = DeepFM(self.num_features, self.cat_features_size, self.args.emb_dim, mlp_dims=[200, 200, 200], drop_rate=0.1)
         else:
             raise Exception
         self.model.to(self.device)
@@ -47,6 +51,7 @@ class Trainer():
 
         self.train_actual = None
         self.valid_actual = None
+        self.total_interaction = None
 
 
     def get_model(self):
@@ -182,11 +187,16 @@ class Trainer():
         num_items = self.cat_features_size['item']
         
         prediction = []
-        logger.info("Predict all users and items interaction....")
-        for _, user in enumerate(tqdm(range(num_users))):
-            user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
+        
+        if self.total_interaction is None:
+            self.total_interaction = self._input_of_total_user_item(num_users, num_items)
+        
+        logger.info("[EVAL]Predict all users and items interaction....")
+        for idx, user in enumerate(tqdm(range(num_users))):
+            start_idx, end_idx = idx * num_items, (idx+1) * num_items
+            user_X = self.total_interaction[start_idx:end_idx, :]
             user_mask = torch.tensor([0 if item in self.train_actual[user] else 1 for item in range(num_items)], dtype=int)
-            
+
             user_pred = self.model(user_X).detach().cpu()
             user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
             
@@ -202,7 +212,8 @@ class Trainer():
 
 
     def actual_interaction_dict(self, X):
-        return pd.DataFrame(X, columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
+        offset = len(self.num_features)
+        return pd.DataFrame(X[:, offset:offset+2], columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
 
     def inference(self, k=10):
         logger.info("Inference Start....")
@@ -212,9 +223,10 @@ class Trainer():
         num_items = self.cat_features_size['item']
         prediction = []
 
-        logger.info("Predict all users and items interaction....")
-        for _, user in enumerate(tqdm(range(num_users))):
-            user_X = torch.tensor([[user, item] for item in range(num_items)], dtype=int).to(self.device)
+        logger.info("[INFER]Predict all users and items interaction....")
+        for idx, user in enumerate(tqdm(range(num_users))):
+            start_idx, end_idx = idx * num_items, (idx+1) * num_items
+            user_X = self.total_interaction[start_idx:end_idx, :]
             user_mask = torch.tensor([0 if (
                 item in self.train_actual[user]) or (item in self.valid_actual[user]) else 1 for item in range(num_items)], dtype=int)
             
@@ -240,3 +252,40 @@ class Trainer():
         with open(f'{self.best_model_dir}/best_model_info.txt', 'r') as f:
             info = f.readlines()
         logger.info(info)
+
+    def _input_of_total_user_item(self, num_users, num_items):
+        # Create user-item interaction matrix
+        logger.info("Make base users and items interaction....")
+        users = np.arange(num_users)[:, None]
+        items = np.arange(num_items)[None, :]
+        data = np.column_stack(
+            (np.repeat(users, num_items, axis=1).flatten(), np.tile(items, (num_users, 1)).flatten())
+        )
+
+        # Convert to DataFrame
+        data = pd.DataFrame(data, columns=['user', 'item'], dtype=int)
+
+        assert len(data) == (num_users * num_items), f"Total Interaction이 부족합니다: {len(data)}"
+
+        logger.info("Map side informations...")
+
+        # decoding
+        logger.info("decoding user and item id...")
+        mapped_data = data.copy()
+        mapped_data[['user', 'item']] = self.data_pipeline.decode_categorical_features(data)
+
+        # mapping side informations - 6 minutes...
+        make_year(mapped_data)
+
+        # concat with encoded user and item
+        data = pd.concat([data, mapped_data.drop(['user','item'], axis=1)], axis=1)
+        
+        # ordering
+        num_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'N']]
+        cat_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'C']]
+        data = pd.concat([data[num_features], data[cat_features]], axis=1)
+
+        # transform to tensor
+        data = torch.tensor(data.values).to(self.device)
+
+        return data

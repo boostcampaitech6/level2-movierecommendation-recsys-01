@@ -7,6 +7,7 @@ optimizer:  adamw
 model_dir:  outputs/models
 submit_dir: outputs/submissions
 data_dir:   outputs/datasets
+device: cuda # cpu
 
 # data config
 neg_count:  50
@@ -14,7 +15,7 @@ feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Nu
     'user':     [1,C],
     'item':     [1,C],
     'time':     [0,N],
-    'year':     [0,C],
+    'year':     [1,N],
     'writer':   [0,C],
     'title':    [0,C],
     'genre':    [0,C],
@@ -23,11 +24,11 @@ feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Nu
 data_rebuild: False # True, False
 
 # model config
-model_name: DeepFM # FM, DeepFM
+model_name: FM # FM, DeepFM
 emb_dim:    64
 
 # wandb config
-wandb:      True # True, False
+wandb:      False # True, False
 project:    movierec
 
 # logging level

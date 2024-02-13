@@ -89,6 +89,12 @@ def main(args: DictConfig):
     cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
     train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
     valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
+
+    # scaling
+    logging.info("scaling numeric features...")
+    num_features = [name for name, options in args.feature_sets.items() if options == [1, 'N']]
+    train_data['X'] = data_pipeline.scale_numeric_features(train_data['X'], num_features)
+    valid_data['X'] = data_pipeline.scale_numeric_features(valid_data['X'], num_features)
     
     # dataset
     logging.info("make Dataset...")
@@ -102,7 +108,7 @@ def main(args: DictConfig):
     
     # Trainer 
     logging.info("make Trainer...")
-    trainer = Trainer(args, data_pipeline.cat_features_size, runname)
+    trainer = Trainer(args, data_pipeline, runname)
     trainer.run(train_dataloader, valid_dataloader)
 
     # Load Best Model

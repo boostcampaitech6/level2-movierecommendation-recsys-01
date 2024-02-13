@@ -32,7 +32,7 @@ class FMLayer(nn.Module):
 
         
 class FM(nn.Module):
-    def __init__(self, cat_features_size, emb_dim):
+    def __init__(self, num_features: list, cat_features_size: dict, emb_dim: int):
         '''
         Parameter
             input_dim: Input dimension in sparse representation (2652 in MovieLens-100k)
@@ -41,13 +41,15 @@ class FM(nn.Module):
         super(FM, self).__init__()
         
         self.emb_dim = emb_dim
+        self.num_features = num_features
         self.cat_features_size = cat_features_size
-        self.input_dim = sum(self.cat_features_size.values())
+        self.input_dim = len(self.num_features) + sum(self.cat_features_size.values())
         
-        self.bias = nn.ModuleList([
-            nn.Embedding(feature_size, 1) for cat_name, feature_size in self.cat_features_size.items()])
+        self.con_bias = [nn.Parameter(torch.zeros((1,))) for _ in range(len(self.num_features))]
+        self.cat_bias = nn.ModuleList([
+            nn.Embedding(feature_size, 1) for _, feature_size in self.cat_features_size.items()])
 
-        self.fm = FMLayer(self.input_dim, self.emb_dim) 
+        self.fm = FMLayer(self.input_dim, self.emb_dim)
 
         self._initialize_weights()
 
@@ -67,14 +69,24 @@ class FM(nn.Module):
             y: Float tensor of size "(batch_size)"
         '''
         # global bias
-        bias = [emb(x[:,idx]) for idx, emb in enumerate(self.bias)] # u_bias, i_bias
-        bias = torch.concat(bias, axis=-1)
+        # con_bias = [bias.unsqueeze(0).expand(x.size(0), -1).to(x.device) for bias in self.con_bias] # (batch_size, 1)
+ 
+        cat_index_offset = len(self.num_features)
+        cat_bias = [emb(x[:,cat_index_offset + idx]) for idx, emb in enumerate(self.cat_bias)] # u_bias, i_bias
+        
+        bias = torch.cat(cat_bias, axis=-1)
         bias_term = torch.sum(bias, axis=1)
 
-        # add offsets
-        x = x + x.new_tensor([0, *np.cumsum(self.cat_features_size.values())[:-1]])
+        # split numeric and categorical features value
+        num_x = x[:, :cat_index_offset]
+        cat_x = x[:, cat_index_offset:]
+
         # one-hot transformation
-        x_fm = torch.zeros(x.size(0), sum(self.cat_features_size.values()), device=x.device).scatter_(1, x, 1.)
+        # add offsets to categorical features value
+        cat_x = cat_x + cat_x.new_tensor([0, *np.cumsum(self.cat_features_size.values())[:-1]])
+        cat_x = torch.zeros(cat_x.size(0), sum(self.cat_features_size.values()), device=cat_x.device).scatter_(1, cat_x, 1.)
+        x_fm = torch.concat([num_x, cat_x], axis=1)
+
         # concat results
         y = bias_term + self.fm(x_fm)
         y = torch.sigmoid(y)
