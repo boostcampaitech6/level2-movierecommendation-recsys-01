@@ -18,8 +18,11 @@ import hydra
 from omegaconf import DictConfig
 
 from src.data.datasets import (
-    DataPipeline, FMDataset,
+    DataPipeline, #FMDataset,
     )
+from src.data.FMdatasets import (
+    FMDataPipeline, FMDataset,
+    ) 
 from src.trainer import Trainer
 from src.utils import set_seed, create_data_path, save_submission
 
@@ -69,7 +72,10 @@ def main(args: DictConfig):
 
     # create data_path
     data_path, train_path, valid_path, evaluate_path = create_data_path(args)
-    data_pipeline = DataPipeline(args)
+    if args.model_name in ('FM', 'DeepFM'):
+        data_pipeline = FMDataPipeline(args)
+    else:
+        raise ValueError()
 
     if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)) \
         or (not os.path.exists(evaluate_path)) or args.data_rebuild :

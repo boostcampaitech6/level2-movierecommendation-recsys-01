@@ -1,6 +1,3 @@
-# datasets.py
-import pickle
-from tqdm import tqdm
 from abc import *
 
 import numpy as np
@@ -15,60 +12,18 @@ from torch.utils.data import Dataset
 import logging
 logger = logging.getLogger(__name__)
 
+from .datasets import DataPipeline
 from .features import (
     make_writer, make_director, make_genre, make_title, make_year
 )
 
-class DataPipeline:
+class FMDataPipeline(DataPipeline):
 
     def __init__(self, args):
-        self.args = args
+        super().__init__(args)
         self.ordinal_encoder = None
         self.num_features = None
         self.cat_features_size = None
-        self.users = None
-        self.items = None
-
-    def _read_data(self):
-        logger.info('read data...')
-        # read csv
-        path = '/data/ephemeral/data/train/train_ratings.csv'
-        df = pd.read_csv(path)
-
-        self.users = df['user'].unique()
-        self.items = df['item'].unique()
-        return df
-
-    def _neg_sampling(self, df):
-        logger.info('negative sampling...')
-        '''
-        input: df (pos only)
-        return: df (pos + neg)
-        '''
-        # positive rating
-        df['rating'] = 1
-        unique_items = df.item.unique()
-        
-        # positive 파악
-        user_items = df.groupby('user').agg(pos_items=('item', set))
-
-        # positive 빼기
-        neg_items = user_items['pos_items'].apply(lambda x: set(unique_items)-x)
-
-        # sampling
-        user_items['neg_items'] = neg_items.apply(
-                lambda x: np.random.choice(list(x), size=self.args.neg_count))
-        
-        # series to dataframe
-        # user, item
-        neg_samples_df = user_items.explode('neg_items')
-        neg_samples_df = neg_samples_df.drop(columns=['pos_items']).reset_index()
-        neg_samples_df = neg_samples_df.rename(columns={'neg_items': 'item'})
-        neg_samples_df['rating'] = 0
-
-        df = pd.concat([df, neg_samples_df.astype(int)], axis=0).reset_index(drop=True)
-
-        return df
     
     def _feature_engineering(self, df):
         logger.info('feature engineering...')
@@ -95,25 +50,14 @@ class DataPipeline:
             'y': df[['rating']],
         }
 
-    @abstractmethod
     def preprocess_data(self):
-        pass
-#        logger.info("preprocess data...")
-#        df = self._read_data()
-#        df = self._neg_sampling(df)
-#        df = self._feature_engineering(df)
-#        df = self._feature_selection(df)
-#        data = self._data_formatting(df)
-#        return data
-
-    def save_data(self, data, data_name):
-        with open(data_name, 'wb') as f:
-            pickle.dump(data, f)
-
-    def load_data(self, data_name):
-        logger.info("load data files...")
-        with open(data_name, 'rb') as f:
-            data = pickle.load(f)
+        # abstract
+        logger.info("preprocess data...")
+        df = self._read_data()
+        df = self._neg_sampling(df)
+        df = self._feature_engineering(df)
+        df = self._feature_selection(df)
+        data = self._data_formatting(df)
         return data
 
     def encode_categorical_features(self, df, cat_features):
@@ -172,7 +116,7 @@ class DataPipeline:
         evaluate_data = self._input_of_total_user_item() # array -> trainer 
 
         return train_data, valid_data, evaluate_data
-    
+
     def _input_of_total_user_item(self):
         num_users = len(self.users)
         num_items = len(self.items)
@@ -202,3 +146,19 @@ class DataPipeline:
         data = pd.concat([data[num_features], data[cat_features]], axis=1)
 
         return data
+
+
+
+class FMDataset(Dataset):
+    def __init__(self, data, train=False):
+        super().__init__()
+        self.X = data['X'].values.astype(np.float32)
+        self.train = train
+        if self.train:
+            self.y = data['y'].values.astype(np.float32)
+
+    def __len__(self):
+        return self.X.shape[0]
+
+    def __getitem__(self, index):
+        return {'X': self.X[index], 'y': self.y[index]}
