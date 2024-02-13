@@ -45,7 +45,8 @@ class FM(nn.Module):
         self.cat_features_size = cat_features_size
         self.input_dim = len(self.num_features) + sum(self.cat_features_size.values())
         
-        self.con_bias = [nn.Parameter(torch.zeros((1,))) for _ in range(len(self.num_features))]
+        self.global_bias = nn.Parameter(torch.rand((1,)))
+        self.num_bias = nn.Parameter(torch.rand(len(num_features)))
         self.cat_bias = nn.ModuleList([
             nn.Embedding(feature_size, 1) for _, feature_size in self.cat_features_size.items()])
 
@@ -69,13 +70,14 @@ class FM(nn.Module):
             y: Float tensor of size "(batch_size)"
         '''
         # global bias
-        # con_bias = [bias.unsqueeze(0).expand(x.size(0), -1).to(x.device) for bias in self.con_bias] # (batch_size, 1)
- 
+        global_bias = self.global_bias.unsqueeze(0).expand(x.size(0), -1).to(x.device)
+        # numeric bias
+        num_bias = x[:,:len(self.num_features)] * self.num_bias
+        # categorical bias
         cat_index_offset = len(self.num_features)
-        cat_bias = [emb(x[:,cat_index_offset + idx]) for idx, emb in enumerate(self.cat_bias)] # u_bias, i_bias
-        
-        bias = torch.cat(cat_bias, axis=-1)
-        bias_term = torch.sum(bias, axis=1)
+        cat_bias = torch.concatenate([emb(x[:,cat_index_offset + idx]) for idx, emb in enumerate(self.cat_bias)], dim=-1) # u_bias, i_bias
+        # sum of bias 
+        bias_term = torch.sum(torch.cat([global_bias, num_bias, cat_bias], dim=-1), dim=-1) #torch.sum([bias, axis=1)
 
         # split numeric and categorical features value
         num_x = x[:, :cat_index_offset]
