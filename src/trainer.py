@@ -185,6 +185,7 @@ class Trainer():
 
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
+        offset = len(self.num_features)
         
         prediction = []
         
@@ -192,12 +193,16 @@ class Trainer():
             self.total_interaction = self._input_of_total_user_item(num_users, num_items)
         
         logger.info("[EVAL]Predict all users and items interaction....")
-        for idx, user in enumerate(tqdm(range(num_users))):
+
+        users = self.total_interaction[:, offset].unique().detach().cpu().numpy()
+
+        for idx, user in enumerate(tqdm(users)):
             start_idx, end_idx = idx * num_items, (idx+1) * num_items
             user_X = self.total_interaction[start_idx:end_idx, :]
-            user_mask = torch.tensor([0 if item in self.train_actual[user] else 1 for item in range(num_items)], dtype=int)
+            user_items = user_X.detach().cpu().numpy()[:, offset+1]
+            user_mask = torch.tensor([0 if item.item() in self.train_actual[int(user)] else 1 for item in user_items], dtype=int)
 
-            user_pred = self.model(user_X).detach().cpu()
+            user_pred = self.model(user_X.float()).detach().cpu()
             user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
             
             user_pred = np.argpartition(user_pred.numpy(), -k)[-k:]
@@ -221,16 +226,18 @@ class Trainer():
 
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
+        offset = len(self.num_features)
         prediction = []
 
         logger.info("[INFER]Predict all users and items interaction....")
         for idx, user in enumerate(tqdm(range(num_users))):
             start_idx, end_idx = idx * num_items, (idx+1) * num_items
             user_X = self.total_interaction[start_idx:end_idx, :]
+            user_items = user_X[:, offset+1]
             user_mask = torch.tensor([0 if (
-                item in self.train_actual[user]) or (item in self.valid_actual[user]) else 1 for item in range(num_items)], dtype=int)
+                item.item() in self.train_actual[user]) or (item in self.valid_actual[user]) else 1 for item in user_items], dtype=int)
             
-            user_pred = self.model(user_X).detach().cpu()
+            user_pred = self.model(user_X.float()).detach().cpu()
             user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
             
             user_pred = np.argpartition(user_pred.numpy(), -k)[-k:]
