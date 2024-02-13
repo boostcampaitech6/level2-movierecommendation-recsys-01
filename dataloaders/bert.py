@@ -39,6 +39,10 @@ class BertDataloader(AbstractDataloader):
         test_loader = self._get_test_loader()
         return train_loader, val_loader, test_loader
 
+    def get_sub_loader(self):
+        sub_loader = self._get_sub_loader()
+        return sub_loader
+
     def _get_train_loader(self):
         dataset = self._get_train_dataset()
         dataloader = data_utils.DataLoader(dataset, batch_size=self.args.train_batch_size,
@@ -69,8 +73,9 @@ class BertDataloader(AbstractDataloader):
 
     def _get_sub_loader(self):
         batch_size = self.args.test_batch_size
-        dataset = BertEvalDataset(self.train, answers, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, mode='sub')
-        dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,suffle=False,pin_memory=True)
+        dataset = BertEvalDataset(self.train, self.test, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, mode='sub')
+        dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,shuffle=False,pin_memory=True)
+        return dataloader
 
 
 class BertTrainDataset(data_utils.Dataset):
@@ -133,14 +138,17 @@ class BertEvalDataset(data_utils.Dataset):
         self.mask_token = mask_token
         self.negative_samples = negative_samples
         self.mode = mode
-        #print(self.u2seq.keys())
+        # print(self.u2seq[0], self.u2seq[11])
+        # print(max(self.users))
         self.user_dict = {idx: key for idx, key in enumerate(self.u2seq.keys())}
-        #print(user_dict)
+        # print(self.user_dict)
+
     def __len__(self):
         return len(self.users)
 
     def __getitem__(self, index):
-        user = self.users[self.user_dict[index]]
+        user = self.users[index]
+        # print(index, self.user_dict[index], self.users[self.user_dict[index]])
         seq = self.u2seq[user]
         answer = self.u2answer[user]
         negs = self.negative_samples[user]
@@ -154,5 +162,5 @@ class BertEvalDataset(data_utils.Dataset):
         padding_len = self.max_len - len(seq)
         seq = [0] * padding_len + seq
 
-        return user,torch.LongTensor(seq), torch.LongTensor(candidates), torch.LongTensor(labels)
+        return user, torch.LongTensor(seq), torch.LongTensor(candidates), torch.LongTensor(labels)
 

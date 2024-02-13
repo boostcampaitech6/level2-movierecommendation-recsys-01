@@ -5,6 +5,7 @@ from utils import AverageMeterSet
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import wandb
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -196,18 +197,20 @@ class AbstractTrainer(metaclass=ABCMeta):
                 json.dump(average_metrics, f, indent=4)
             print(average_metrics)
 
-    def submission(self, inv_umap, inv_smap):
+    def submission(self, sub, inv_umap, inv_smap, user_lst):
         print("Make sumbission!")
         best_model = torch.load(os.path.join(self.export_root, 'models', 'best_acc_model.pth')).get('model_state_dict')
         self.model.load_state_dict(best_model)
         self.model.eval()
-        #print(inv_umap, inv_smap)
+        # print(inv_umap)
+        # print("WEWEWEWEWEEWE")
         pred_list ={}
         answer_list = None
         average_meter_set = AverageMeterSet()
-
+        smap_lst = []
+        
         with torch.no_grad():
-            tqdm_dataloader = tqdm(self.test_loader)
+            tqdm_dataloader = tqdm(sub)
             for batch_idx, batch in enumerate(tqdm_dataloader):
                 batch = [x.to(self.device) for x in batch]
                 index, seqs, candidates, labels = batch
@@ -215,16 +218,32 @@ class AbstractTrainer(metaclass=ABCMeta):
                 scores = scores[:, -1, :]  # B x V
                 scores = scores.gather(1, candidates)  # B x C
                 rank = (-scores).argsort(dim=1)
-                cut = rank[:, :10]
+                cut = rank[:, :10].detach().cpu().numpy()
                 # breakpoint()
-                print(cut)
-                for i in index:
-                    item = []
-                    for x in cut:
-                        x = x.detach().cpu().numpy()
-                        item.append(inv_smap[str(s)] for s in tuple(x))
-                        pred_list[inv_umap[i.item()]] = item
-                     
+                # print(cut)
+                # print("@@@@@@@@")
+                # print(index)
+                
+                for i in cut:
+                    tmp = []
+                    for j in i:
+                        tmp.append(inv_smap[j])
+                    smap_lst.append(tmp)
+                        
+                index = index.detach().cpu().numpy()
+                for inx in index:
+                    pred_list[inv_umap[user_lst[inx]]] = smap_lst[inx]
+                    
+                    
+                # for i in index:
+                #     item = []
+                #     for x in cut.tolist():
+                #         #print(x)
+                #         #x = x.detach().cpu().numpy()
+                #         #x.apply(a : lambda a = inv_smap[a])
+                        
+                #         pred_list[inv_umap[i.item()]] = item
+        # print(pred_list)   
         return pred_list
 
     def _create_optimizer(self):

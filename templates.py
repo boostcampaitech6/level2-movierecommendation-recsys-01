@@ -35,7 +35,7 @@ def set_template(args):
         args.gamma = 1.0
         args.num_epochs = 100 if args.dataset_code == 'ml-1m' else 1
         args.metric_ks = [1, 5, 10, 20, 50, 100]
-        args.best_metric = 'NDCG@10'
+        args.best_metric = 'Recall@10'
 
         args.model_code = 'bert'
         args.model_init_seed = 0

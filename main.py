@@ -10,7 +10,8 @@ from utils import *
 def train():
     export_root = setup_train(args)
     train_loader, val_loader, test_loader = dataloader_factory(args)
-    inv_umap, inv_smap = loader_submission(args)
+    sub, inv_umap, inv_smap, user_lst = loader_submission(args)
+    print(type(sub))
     model = model_factory(args)
     trainer = trainer_factory(args, model, train_loader, val_loader, test_loader, export_root)
     trainer.train()
@@ -21,8 +22,8 @@ def train():
 
     inference_model = (input('Inference model? y/[n]: ')=='y')
     if inference_model:
-        preds = trainer.submission(inv_umap, inv_smap)
-        print(preds)
+        preds = trainer.submission(sub, inv_umap, inv_smap, user_lst)
+        #print(preds)
         # Flatten the dictionary values
         # Create an empty list to store the flattened data
         flattened_data = []
@@ -33,9 +34,9 @@ def train():
             for value in values:
                 flattened_data.append((key, value))
         
-        print(flattened_data)
         # Construct DataFrame
         df = pd.DataFrame(data=flattened_data)
+        #df.drop(index=df[df['0']==6881][10:].index.tolist(), inplace=True)
         df.to_csv('out.csv', index=False)
 
 if __name__ == '__main__':

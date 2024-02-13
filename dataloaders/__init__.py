@@ -20,6 +20,9 @@ def loader_submission(args):
     dataset = dataset_factory(args)
     dataloader = DATALOADERS[args.dataloader_code]
     dataloader = dataloader(args, dataset)
-    inv_umap, inv_samp = dataloader.get_umap_smap()
-    return inv_umap, inv_samp
+    inv_umap, inv_smap = dataloader.get_umap_smap()
+    user_lst = dataloader.get_user_lst()
+    sub = dataloader.get_sub_loader()
+    return sub, inv_umap, inv_smap, user_lst
+
     

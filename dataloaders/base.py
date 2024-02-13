@@ -16,6 +16,7 @@ class AbstractDataloader(metaclass=ABCMeta):
         self.smap = dataset['smap']
         self.inv_umap = dataset['inv_umap']
         self.inv_smap = dataset['inv_smap']
+        self.user_lst = dataset['user_lst']
         self.user_count = len(self.umap)
         self.item_count = len(self.smap)
 
@@ -27,6 +28,13 @@ class AbstractDataloader(metaclass=ABCMeta):
     @abstractmethod
     def get_pytorch_dataloaders(self):
         pass
-
+    
+    @abstractmethod
+    def get_sub_loader(self):
+        pass
+    
     def get_umap_smap(self):
         return self.inv_umap, self.inv_smap
+    
+    def get_user_lst(self):
+        return self.user_lst

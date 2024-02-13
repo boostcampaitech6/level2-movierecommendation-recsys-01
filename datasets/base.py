@@ -73,6 +73,7 @@ class AbstractDataset(metaclass=ABCMeta):
         df = self.filter_triplets(df)
         df, umap, smap, inv_umap, inv_smap = self.densify_index(df)
         train, val, test = self.split_df(df, len(umap))
+        user_lst = df['uid'].unique()
         dataset = {'train': train,
                    'val': val,
                    'test': test,
@@ -80,6 +81,7 @@ class AbstractDataset(metaclass=ABCMeta):
                    'smap': smap,
                    'inv_umap':inv_umap,
                    'inv_smap':inv_smap,
+                   'user_lst': user_lst,
                    }
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)
@@ -150,9 +152,14 @@ class AbstractDataset(metaclass=ABCMeta):
         if self.args.split == 'leave_one_out':
             print('Splitting')
             user_group = df.groupby('uid')
+            print(df['uid'].describe())
+            # user_lst = df['uid'].unique()
             user2items = user_group.progress_apply(lambda d: list(d.sort_values(by='timestamp')['sid']))
             train, val, test = {}, {}, {}
-            for user, group in user_group:
+            for user, group in enumerate(user_group):
+                # user=user_lst[user]
+                # print(user, inv_umap[user])
+                #user = inv_umap[user]
                 items = user2items[user]
                 train[user], val[user], test[user] = items[:-2], items[-2:-1], items[-1:]
             return train, val, test
