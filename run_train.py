@@ -68,34 +68,39 @@ def main(args: DictConfig):
     set_seed(args.seed)
 
     # create data_path
-    data_path, train_path, valid_path = create_data_path(args)
+    data_path, train_path, valid_path, evaluate_path = create_data_path(args)
     data_pipeline = DataPipeline(args)
 
-    if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)) or args.data_rebuild:
+    if (not os.path.exists(train_path)) or (not os.path.exists(valid_path)) \
+        or (not os.path.exists(evaluate_path)) or args.data_rebuild :
         logging.info("build datasets...")
         Path(data_path).mkdir(exist_ok=True, parents=True)
         data = data_pipeline.preprocess_data()
-        train_data, valid_data = data_pipeline.split_data(data)
+        train_data, valid_data, evaluate_data = data_pipeline.split_data(data)
 
         data_pipeline.save_data(train_data, train_path)
         data_pipeline.save_data(valid_data, valid_path)
+        data_pipeline.save_data(evaluate_data, evaluate_path)
     else:
         logging.info("using saved datasets...")
         train_data = data_pipeline.load_data(train_path)
         valid_data = data_pipeline.load_data(valid_path)
+        evaluate_data = data_pipeline.load_data(evaluate_path)
 
     # ordinal encoding
     logging.info("encode categorical features...")
     cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
     train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
     valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
+    evaluate_data = data_pipeline.encode_categorical_features(evaluate_data, cat_features)
 
     # scaling
     logging.info("scaling numeric features...")
     num_features = [name for name, options in args.feature_sets.items() if options == [1, 'N']]
     train_data['X'] = data_pipeline.scale_numeric_features(train_data['X'], num_features)
     valid_data['X'] = data_pipeline.scale_numeric_features(valid_data['X'], num_features)
-    
+    evaluate_data = data_pipeline.scale_numeric_features(evaluate_data, num_features)
+
     # dataset
     logging.info("make Dataset...")
     train_dataset = FMDataset(train_data, train=True)
@@ -108,7 +113,7 @@ def main(args: DictConfig):
     
     # Trainer 
     logging.info("make Trainer...")
-    trainer = Trainer(args, data_pipeline, runname)
+    trainer = Trainer(args, evaluate_data, data_pipeline, runname)
     trainer.run(train_dataloader, valid_dataloader)
 
     # Load Best Model

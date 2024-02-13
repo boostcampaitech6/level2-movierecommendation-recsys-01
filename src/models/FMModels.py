@@ -75,13 +75,13 @@ class FM(nn.Module):
         num_bias = x[:,:len(self.num_features)] * self.num_bias
         # categorical bias
         cat_index_offset = len(self.num_features)
-        cat_bias = torch.concatenate([emb(x[:,cat_index_offset + idx]) for idx, emb in enumerate(self.cat_bias)], dim=-1) # u_bias, i_bias
+        cat_bias = torch.concatenate([emb(x[:,cat_index_offset + idx].int()) for idx, emb in enumerate(self.cat_bias)], dim=-1) # u_bias, i_bias
         # sum of bias 
         bias_term = torch.sum(torch.cat([global_bias, num_bias, cat_bias], dim=-1), dim=-1) #torch.sum([bias, axis=1)
 
         # split numeric and categorical features value
         num_x = x[:, :cat_index_offset]
-        cat_x = x[:, cat_index_offset:]
+        cat_x = x[:, cat_index_offset:].long()
 
         # one-hot transformation
         # add offsets to categorical features value

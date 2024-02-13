@@ -36,8 +36,9 @@ def create_data_path(args):
     data_path = f'{args.data_dir}/{args.model_name}-{args.neg_count}-{feature_bit}'
     train_data_path = f'{data_path}/train.pickle'
     valid_data_path = f'{data_path}/valid.pickle'
+    evaluate_data_path = f'{data_path}/evaluate.pickle'
 
-    return data_path, train_data_path, valid_data_path
+    return data_path, train_data_path, valid_data_path, evaluate_data_path
 
 
 def save_submission(prediction, args, runname):

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer():
-    def __init__(self, args, data_pipeline, runname) -> None:
+    def __init__(self, args, evaluate_data, data_pipeline, runname) -> None:
 
         self.args = args
         self.device = torch.device(self.args.device)
@@ -51,7 +51,7 @@ class Trainer():
 
         self.train_actual = None
         self.valid_actual = None
-        self.total_interaction = None
+        self.total_interaction = torch.tensor(evaluate_data.values).to(self.device)
 
 
     def get_model(self):
@@ -252,40 +252,3 @@ class Trainer():
         with open(f'{self.best_model_dir}/best_model_info.txt', 'r') as f:
             info = f.readlines()
         logger.info(info)
-
-    def _input_of_total_user_item(self, num_users, num_items):
-        # Create user-item interaction matrix
-        logger.info("Make base users and items interaction....")
-        users = np.arange(num_users)[:, None]
-        items = np.arange(num_items)[None, :]
-        data = np.column_stack(
-            (np.repeat(users, num_items, axis=1).flatten(), np.tile(items, (num_users, 1)).flatten())
-        )
-
-        # Convert to DataFrame
-        data = pd.DataFrame(data, columns=['user', 'item'], dtype=int)
-
-        assert len(data) == (num_users * num_items), f"Total Interaction이 부족합니다: {len(data)}"
-
-        logger.info("Map side informations...")
-
-        # decoding
-        logger.info("decoding user and item id...")
-        mapped_data = data.copy()
-        mapped_data[['user', 'item']] = self.data_pipeline.decode_categorical_features(data)
-
-        # mapping side informations - 6 minutes...
-        make_year(mapped_data)
-
-        # concat with encoded user and item
-        data = pd.concat([data, mapped_data.drop(['user','item'], axis=1)], axis=1)
-        
-        # ordering
-        num_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'N']]
-        cat_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'C']]
-        data = pd.concat([data[num_features], data[cat_features]], axis=1)
-
-        # transform to tensor
-        data = torch.tensor(data.values).to(self.device)
-
-        return data

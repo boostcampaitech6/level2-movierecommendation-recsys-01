@@ -25,12 +25,17 @@ class DataPipeline:
         self.ordinal_encoder = None
         self.num_features = None
         self.cat_features_size = None
+        self.users = None
+        self.items = None
 
     def _read_data(self):
         logger.info('read data...')
         # read csv
         path = '/data/ephemeral/data/train/train_ratings.csv'
         df = pd.read_csv(path)
+
+        self.users = df['user'].unique()
+        self.items = df['item'].unique()
         return df
 
     def _neg_sampling(self, df):
@@ -60,7 +65,7 @@ class DataPipeline:
         neg_samples_df = neg_samples_df.rename(columns={'neg_items': 'item'})
         neg_samples_df['rating'] = 0
 
-        df = pd.concat([df, neg_samples_df], axis=0).reset_index(drop=True)
+        df = pd.concat([df, neg_samples_df.astype(int)], axis=0).reset_index(drop=True)
 
         return df
     
@@ -161,14 +166,45 @@ class DataPipeline:
 
         train_data = {'X': X_train, 'y': y_train}
         valid_data = {'X': X_valid, 'y': y_valid}
+        evaluate_data = self._input_of_total_user_item() # array -> trainer 
 
-        return train_data, valid_data
+        return train_data, valid_data, evaluate_data
+    
+    def _input_of_total_user_item(self):
+        num_users = len(self.users)
+        num_items = len(self.items)
+        
+        # Create user-item interaction matrix
+        logger.info("Make base users and items interaction....")
+        users = self.users[:, None]
+        items = self.items[None, :]
+        data = np.column_stack(
+            (np.repeat(users, num_items, axis=1).flatten(), np.tile(items, (num_users, 1)).flatten())
+        )
+
+        # Convert to DataFrame
+        data = pd.DataFrame(data, columns=['user', 'item'])
+
+        assert len(data) == (num_users * num_items), f"Total Interaction이 부족합니다: {len(data)}"
+
+        logger.info("Map side informations...")
+
+        # mapping side informations - 6 minutes...
+        make_year(data)
+
+        # ordering
+        logger.info("Ordering numeric and categorical features...")
+        num_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'N']]
+        cat_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'C']]
+        data = pd.concat([data[num_features], data[cat_features]], axis=1)
+
+        return data
 
 
 class FMDataset(Dataset):
     def __init__(self, data, train=False):
         super().__init__()
-        self.X = data['X'].values.astype(int)
+        self.X = data['X'].values.astype(np.float32)
         self.train = train
         if self.train:
             self.y = data['y'].values.astype(np.float32)
