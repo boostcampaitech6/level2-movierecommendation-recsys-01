@@ -76,6 +76,9 @@ Numbers under model names indicate the number of hidden layers.
 
 <img src=Images/ML1m-results.png>
 
+## MovieLens-2m 
+--> 이게 우리 대회 데이터셋이야!
+
 ## MovieLens-20m
 
 <img src=Images/ML20m-results.png>
