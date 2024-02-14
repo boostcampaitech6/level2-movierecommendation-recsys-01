@@ -1,16 +1,21 @@
 # run config
 seed:       42
-runname:    FM_240208-143255
+runname:    FM_240214-000056
 model_dir:  outputs/models
 submit_dir: outputs/submissions
 data_dir:   outputs/datasets
 
 # data config
 neg_count:  50
-feature_sets: {
-    'user':     1,
-    'item':     1,
-    'title':    0,
+feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Numeric)]
+    'user':     [1,C],
+    'item':     [1,C],
+    'time':     [0,N],
+    'year':     [1,N],
+    'writer':   [0,C],
+    'title':    [0,C],
+    'genre':    [0,C],
+    'director': [0,C],
 }
 
 # model config
