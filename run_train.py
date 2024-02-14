@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 
 import wandb
 import logging
+import numpy as np
 
 @hydra.main(config_path="./src/configs", config_name="train_config", version_base='1.3')
 def main(args: DictConfig):
@@ -129,8 +130,10 @@ def main(args: DictConfig):
     # Inference
     logging.info("using saved datasets...")
     prediction = trainer.inference()
-    prediction = data_pipeline.decode_categorical_features(prediction)
-    save_submission(prediction, args, runname)
+    # padding for additional categorical features except user and item
+    padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
+    prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
+    save_submission(prediction[:, :2], args, runname)
 
     # wandb finish
     if args.wandb:

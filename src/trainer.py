@@ -139,7 +139,9 @@ class Trainer():
             self.optimizer.step()
 
             total_loss += batch_loss.item()
-            total_X.append(data['X'])
+
+            positive_index = torch.where(data['y'][:,0] == 1)
+            total_X.append(data['X'][positive_index])
         
         total_loss /= len(train_data_loader)
 
@@ -147,6 +149,7 @@ class Trainer():
 
         if self.train_actual is None:
             self.train_actual = self.actual_interaction_dict(total_X)
+            print(self.train_actual[0])
 
         return total_loss
             
@@ -163,7 +166,9 @@ class Trainer():
             batch_loss = self.loss(pred, y)
 
             valid_loss += batch_loss.item()
-            total_X.append(data['X'])
+            
+            positive_index = torch.where(data['y'][:,0] == 1)
+            total_X.append(data['X'][positive_index])
 
         valid_loss /= len(valid_data_loader)
 
@@ -171,6 +176,7 @@ class Trainer():
 
         if self.valid_actual is None:
             self.valid_actual = self.actual_interaction_dict(total_X) # valid 평가시엔 valid actual로
+            print(self.valid_actual[0])
         valid_recall_k, valid_ndcg_k = self.evaluate()
 
         return valid_loss, valid_recall_k, valid_ndcg_k
