@@ -10,7 +10,7 @@ data_dir:   outputs/datasets
 device: cuda # cpu
 
 # data config
-neg_count:  50
+neg_count:  100
 feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Numeric)]
     'user':     [1,C],
     'item':     [1,C],
@@ -24,13 +24,15 @@ feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Nu
 data_rebuild: False # True, False
 
 # model config
-model_name: AE # FM, DeepFM, VAE
+model_name: DAE # FM, DeepFM, AE, DAE
 emb_dim:    64
 latent_dim: 256
 encoder_dims: [1024, 512]
+dropout:        0
+noise_factor:   0.5     # only DAE
 
 # wandb config
-wandb:      False # True, False
+wandb:      True # True, False
 project:    movierec
 
 # logging level

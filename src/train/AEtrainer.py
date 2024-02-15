@@ -8,7 +8,7 @@ from tqdm import tqdm
 import torch
 import wandb
 
-from ..models.AEModels import AE
+from ..models.AEModels import AE, DAE
 from ..metrics import recall_at_k, ndcg_k
 from ..data.features import make_year
 #from ..loss import VAELoss, loss_function_vae
@@ -30,7 +30,11 @@ class AETrainer():
         Path(self.best_model_dir).mkdir(exist_ok=True, parents=True)
 
         if self.args.model_name == "AE":
-            self.model = AE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims)
+            self.model = AE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
+                self.args.dropout)
+        elif self.args.model_name == "DAE":
+            self.model = DAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims, 
+                self.args.noise_factor, self.args.dropout)
 #        elif self.args.model_name == "VAE":
 #            self.model = VAE(evaluate_data['X'].shape[1], self.args.latent_dim, self.args.hidden_layers)
             #self.model = VAE(evaluate_data['X'].shape[1], self.args.latent_dim, self.args.hidden_layers)
@@ -39,7 +43,7 @@ class AETrainer():
             raise Exception
 
         self.model.to(self.device)
-        if self.args.model_name == 'AE':
+        if self.args.model_name in ('AE', 'DAE'):
             self.loss = torch.nn.BCEWithLogitsLoss()
         elif self.args.model_name in ("VAE"):
             self.loss = torch.nn.BCEWithLogitsLoss()#loss_function_vae#VAELoss()
@@ -120,7 +124,6 @@ class AETrainer():
         self.model.train()
         train_loss, train_pred = 0, []
 
-        #for i, (train_data, valid_data) in enumerate(tqdm(train_data_loader, valid_data_loader)):
         for i, train_data in enumerate(tqdm(train_data_loader)):
 
             interact = train_data['interact'].to(self.device)
@@ -196,8 +199,6 @@ class AETrainer():
             prediction.append(user_recom)
 
         prediction = np.concatenate(prediction, axis=0)
-        print(len(list(valid_pos_items.values())))
-        print(prediction.shape)
 
         eval_recall_at_k = recall_at_k(list(valid_pos_items.values()), prediction, k)
         eval_ndcg_at_k = ndcg_k(list(valid_pos_items.values()), prediction, k)
