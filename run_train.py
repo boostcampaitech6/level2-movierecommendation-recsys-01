@@ -143,11 +143,12 @@ def main(args: DictConfig):
     logging.info("make Trainer...")
     if args.model_name in ('FM', 'DeepFM'):
         trainer = FMTrainer(args, evaluate_data, data_pipeline, runname)
+        trainer.run(train_dataloader, valid_dataloader)
     elif args.model_name.endswith('AE'):
         trainer = AETrainer(args, evaluate_data, data_pipeline, runname)
+        trainer.run(train_dataloader, valid_dataloader, valid_data)
     else:
         raise ValueError()
-    trainer.run(train_dataloader, valid_dataloader)
 
     # Load Best Model
     logging.info("using saved datasets...")

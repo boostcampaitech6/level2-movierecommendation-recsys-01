@@ -51,7 +51,7 @@ class AETrainer():
     def get_model(self):
         return self.model
 
-    def run(self, train_data_loader, valid_data_loader):
+    def run(self, train_data_loader, valid_data_loader, valid_data):
         logger.info("Run Trainer...")
         patience = 5
         best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
@@ -78,7 +78,7 @@ class AETrainer():
         for epoch in range(self.args.epochs):
             train_loss, train_pred = self.train(train_data_loader)
             valid_loss = self.validate(train_pred, valid_data_loader)
-            valid_recall_k, valid_ndcg_k = self.evaluate(train_data_loader, valid_data_loader)
+            valid_recall_k, valid_ndcg_k = self.evaluate(train_data_loader, valid_data)
             logger.info(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             # wandb logging
@@ -147,7 +147,7 @@ class AETrainer():
         return train_loss/len(train_data_loader), train_pred
 
     def validate(self, train_pred, valid_data_loader):
-        logger.info("Validation Start....")
+        logger.info("Start Validating....")
         self.model.eval()
         valid_loss = 0
 
@@ -170,10 +170,39 @@ class AETrainer():
 
         return valid_loss/len(valid_data_loader)
 
-    def evaluate(self, train_data_loader, valid_data_loader, k=10):
-        recall_at_k = 0
-        ndcg_at_k = 0
-        return recall_at_k, ndcg_at_k
+    def evaluate(self, train_data_loader, valid_data, k=10):
+        logger.info("Start Evaluating....")
+        self.model.eval()
+        valid_pos_items = valid_data['pos_items']
+        user_items = self.data_pipeline.items # unique suer items
+        prediction = []
+
+        for i, train_data in enumerate(tqdm(train_data_loader)):
+
+            train_interact = train_data['interact'].to(self.device)
+            train_pos_mask = train_data['interact_pos_mask']
+            
+            # prediction
+            train_pred = self.model(train_interact).detach().cpu()
+
+            # masking
+            inv_train_pos_pred = train_pred * ~train_pos_mask #pred * all_mask
+            
+            # find high prob index
+            high_index = np.argpartition(inv_train_pos_pred.numpy(), -k)[:,-k:]
+
+            # find high prob item by index
+            user_recom = user_items[high_index]
+            prediction.append(user_recom)
+
+        prediction = np.concatenate(prediction, axis=0)
+        print(len(list(valid_pos_items.values())))
+        print(prediction.shape)
+
+        eval_recall_at_k = recall_at_k(list(valid_pos_items.values()), prediction, k)
+        eval_ndcg_at_k = ndcg_k(list(valid_pos_items.values()), prediction, k)
+
+        return eval_recall_at_k, eval_ndcg_at_k
 
     def load_best_model(self):
         logger.info('load best model...')
