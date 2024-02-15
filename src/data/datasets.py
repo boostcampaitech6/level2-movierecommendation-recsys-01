@@ -34,7 +34,6 @@ class DataPipeline:
         # read csv
         path = '/data/ephemeral/data/train/train_ratings.csv'
         df = pd.read_csv(path)
-
         self.users = df['user'].unique()
         self.items = df['item'].unique()
         return df
@@ -98,13 +97,6 @@ class DataPipeline:
     @abstractmethod
     def preprocess_data(self):
         pass
-#        logger.info("preprocess data...")
-#        df = self._read_data()
-#        df = self._neg_sampling(df)
-#        df = self._feature_engineering(df)
-#        df = self._feature_selection(df)
-#        data = self._data_formatting(df)
-#        return data
 
     def save_data(self, data, data_name):
         with open(data_name, 'wb') as f:
@@ -146,32 +138,9 @@ class DataPipeline:
 
         return df
 
+    @abstractmethod
     def split_data(self, data):
-        logger.info('split data...')
-        # split by user and y
-        X_train, X_valid, y_train, y_valid = [],[],[],[]
-
-        for _, user_data in tqdm(data['X'].groupby('user')):
-            user_y = data['y'].iloc[user_data.index]
-
-            user_data_train, user_data_valid, user_y_train, user_y_valid = \
-                    train_test_split(user_data, user_y, test_size=.2,
-                    stratify=user_y)
-
-            X_train.append(user_data_train)
-            X_valid.append(user_data_valid)
-            y_train.append(user_y_train)
-            y_valid.append(user_y_valid)
-        
-        # concat
-        X_train, X_valid = pd.concat(X_train), pd.concat(X_valid)
-        y_train, y_valid = pd.concat(y_train), pd.concat(y_valid)
-
-        train_data = {'X': X_train, 'y': y_train}
-        valid_data = {'X': X_valid, 'y': y_valid}
-        evaluate_data = self._input_of_total_user_item() # array -> trainer 
-
-        return train_data, valid_data, evaluate_data
+        pass
     
     def _input_of_total_user_item(self):
         num_users = len(self.users)

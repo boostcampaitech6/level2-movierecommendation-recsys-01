@@ -37,8 +37,6 @@ class Trainer():
 
         self.best_model_dir = f"{self.args.model_dir}/{runname}"
         Path(self.best_model_dir).mkdir(exist_ok=True, parents=True)
-        # best model name: best_model.pt
-        # best model info: best_model_info.txt
 
         if self.args.model_name == "FM":
             self.model = FM(self.num_features, self.cat_features_size, self.args.emb_dim)
@@ -46,13 +44,13 @@ class Trainer():
             self.model = DeepFM(self.num_features, self.cat_features_size, self.args.emb_dim, mlp_dims=[200, 200, 200], drop_rate=0.1)
         else:
             raise Exception
+
         self.model.to(self.device)
         self.loss = torch.nn.BCELoss()
 
         self.train_actual = None
         self.valid_actual = None
         self.total_interaction = torch.tensor(evaluate_data.values).to(self.device)
-
 
     def get_model(self):
         return self.model
@@ -82,7 +80,6 @@ class Trainer():
             with open(f'{self.best_model_dir}/best_model_info.txt', 'w') as f:
                 f.write(info)
             
-
         for epoch in range(self.args.epochs):
             train_loss = self.train(train_data_loader)
             valid_loss, valid_ndcg_k, valid_recall_k = self.validate(valid_data_loader)
@@ -133,27 +130,24 @@ class Trainer():
             X, y = data['X'].to(self.device), data['y'].to(self.device)
             pred = self.model(X)
             batch_loss = self.loss(pred, y)
-            
+
             self.optimizer.zero_grad()
             batch_loss.backward()
             self.optimizer.step()
 
             total_loss += batch_loss.item()
 
-            positive_index = torch.where(data['y'][:,0] == 1)
+            positive_index = torch.where(data['y'][:,0]==1)
             total_X.append(data['X'][positive_index])
         
         total_loss /= len(train_data_loader)
-
         total_X = np.concatenate(total_X, axis=0)
 
         if self.train_actual is None:
             self.train_actual = self.actual_interaction_dict(total_X)
-            print(self.train_actual[0])
 
         return total_loss
             
-        
     def validate(self, valid_data_loader):
         logger.info("Start Validating....")
         self.model.eval()
@@ -164,10 +158,8 @@ class Trainer():
             X, y = data['X'].to(self.device), data['y'].to(self.device)
             pred = self.model(X)
             batch_loss = self.loss(pred, y)
-
             valid_loss += batch_loss.item()
-            
-            positive_index = torch.where(data['y'][:,0] == 1)
+            positive_index = torch.where(data['y'][:,0]==1)
             total_X.append(data['X'][positive_index])
 
         valid_loss /= len(valid_data_loader)
@@ -176,12 +168,12 @@ class Trainer():
 
         if self.valid_actual is None:
             self.valid_actual = self.actual_interaction_dict(total_X) # valid 평가시엔 valid actual로
-            print(self.valid_actual[0])
+
         valid_recall_k, valid_ndcg_k = self.evaluate()
 
         return valid_loss, valid_recall_k, valid_ndcg_k
     
-    
+
     # calculate recall and ndcg
     def evaluate(self, k=10):
         logger.info("Start Evaluating....")
@@ -192,12 +184,13 @@ class Trainer():
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
         offset = len(self.num_features)
+
         prediction = []
         
         logger.info("[EVAL]Predict all users and items interaction....")
         users = self.total_interaction[:, offset].unique().detach().cpu().numpy()
-
         for idx, user in enumerate(tqdm(users)):
+
             start_idx, end_idx = idx * num_items, (idx+1) * num_items
             user_X = self.total_interaction[start_idx:end_idx, :]
             user_items = user_X.detach().cpu().numpy()[:, offset+1]
@@ -231,17 +224,20 @@ class Trainer():
         num_users = self.cat_features_size['user']
         num_items = self.cat_features_size['item']
         offset = len(self.num_features)
+
         prediction = []
 
         logger.info("[INFER]Predict all users and items interaction....")
         users = self.total_interaction[:, offset].unique().detach().cpu().numpy()
         for idx, user in enumerate(tqdm(users)):
+
             start_idx, end_idx = idx * num_items, (idx+1) * num_items
             user_X = self.total_interaction[start_idx:end_idx, :]
             user_items = user_X.detach().cpu().numpy()[:, offset+1]
             user_mask = torch.tensor([0 if (
-                item.item() in self.train_actual[int(user)]) or (item.item() in self.valid_actual[int(user)]) else 1 for item in user_items], dtype=int)
-            
+                item.item() in self.train_actual[int(user)]) or (
+                item.item() in self.valid_actual[int(user)]) else 1 for item in user_items], dtype=int)
+
             user_pred = self.model(user_X.float()).detach().cpu()
             user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
             

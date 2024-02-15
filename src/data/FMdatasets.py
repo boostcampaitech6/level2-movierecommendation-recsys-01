@@ -144,9 +144,7 @@ class FMDataPipeline(DataPipeline):
         num_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'N']]
         cat_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'C']]
         data = pd.concat([data[num_features], data[cat_features]], axis=1)
-
         return data
-
 
 
 class FMDataset(Dataset):
