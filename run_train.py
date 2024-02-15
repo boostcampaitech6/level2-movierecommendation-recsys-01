@@ -17,13 +17,11 @@ import pytz as tz
 import hydra
 from omegaconf import DictConfig
 
-from src.data.datasets import (
-    DataPipeline,
-    )
-from src.data.FMdatasets import (
-    FMDataPipeline, FMDataset,
-    ) 
+from src.data.FMdatasets import FMDataPipeline, FMDataset
+from src.data.AEdatasets import AEDataPipeline, AEDataset
 from src.train.FMtrainer import FMTrainer
+from src.train.AEtrainer import AETrainer
+
 from src.utils import set_seed, create_data_path, save_submission
 
 import torch
@@ -75,6 +73,8 @@ def main(args: DictConfig):
     data_path, train_path, valid_path, evaluate_path = create_data_path(args)
     if args.model_name in ('FM', 'DeepFM'):
         data_pipeline = FMDataPipeline(args)
+    elif args.model_name.endswith('AE'):
+        data_pipeline = AEDataPipeline(args)
     else:
         raise ValueError()
 
@@ -94,34 +94,57 @@ def main(args: DictConfig):
         valid_data = data_pipeline.load_data(valid_path)
         evaluate_data = data_pipeline.load_data(evaluate_path)
 
-    # ordinal encoding
-    logging.info("encode categorical features...")
-    cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
-    train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
-    valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
-    evaluate_data = data_pipeline.encode_categorical_features(evaluate_data, cat_features)
+    if args.model_name in ('fm', 'deepfm'):
+        # ordinal encoding
+        logging.info("encode categorical features...")
+        cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
+        train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
+        valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
+        evaluate_data = data_pipeline.encode_categorical_features(evaluate_data, cat_features)
 
-    # scaling
-    logging.info("scaling numeric features...")
-    num_features = [name for name, options in args.feature_sets.items() if options == [1, 'N']]
-    train_data['X'] = data_pipeline.scale_numeric_features(train_data['X'], num_features)
-    valid_data['X'] = data_pipeline.scale_numeric_features(valid_data['X'], num_features)
-    evaluate_data = data_pipeline.scale_numeric_features(evaluate_data, num_features)
+        # scaling
+        logging.info("scaling numeric features...")
+        num_features = [name for name, options in args.feature_sets.items() if options == [1, 'N']]
+        train_data['X'] = data_pipeline.scale_numeric_features(train_data['X'], num_features)
+        valid_data['X'] = data_pipeline.scale_numeric_features(valid_data['X'], num_features)
+        evaluate_data = data_pipeline.scale_numeric_features(evaluate_data, num_features)
 
-    # dataset
-    logging.info("make Dataset...")
-    train_dataset = FMDataset(train_data, train=True)
-    valid_dataset = FMDataset(valid_data, train=True)
-    
-    # dataloader
-    logging.info("make DataLoader...")
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
+        # dataset
+        logging.info("make Dataset...")
+        train_dataset = FMDataset(train_data, train=True)
+        valid_dataset = FMDataset(valid_data, train=True)
+
+        # dataloader
+        logging.info("make DataLoader...")
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True)
+
+    elif args.model_name.endswith('AE'):
+        # set unique users and items
+        data_pipeline.set_unique_users_items(train_data)
+
+        # postprocessing
+        logging.info("post-processing...")
+        train_data = data_pipeline.postprocessing(train_data)
+        valid_data = data_pipeline.postprocessing(valid_data)
+        evaluate_data = data_pipeline.postprocessing(evaluate_data)
+
+        # dataset
+        logging.info("make Dataset...")
+        train_dataset = AEDataset(train_data)
+        valid_dataset = AEDataset(valid_data)
+
+        # dataloader
+        logging.info("make DataLoader...")
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size)
     
     # Trainer 
     logging.info("make Trainer...")
     if args.model_name in ('FM', 'DeepFM'):
         trainer = FMTrainer(args, evaluate_data, data_pipeline, runname)
+    elif args.model_name.endswith('AE'):
+        trainer = AETrainer(args, evaluate_data, data_pipeline, runname)
     else:
         raise ValueError()
     trainer.run(train_dataloader, valid_dataloader)
@@ -133,9 +156,10 @@ def main(args: DictConfig):
     # Inference
     logging.info("using saved datasets...")
     prediction = trainer.inference()
-    # padding for additional categorical features except user and item
-    padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
-    prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
+    if args.model_name in ('fm', 'deepfm'):
+        # padding for additional categorical features except user and item
+        padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
+        prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
     save_submission(prediction[:, :2], args, runname)
 
     # wandb finish

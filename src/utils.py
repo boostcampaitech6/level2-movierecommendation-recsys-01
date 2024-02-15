@@ -26,6 +26,11 @@ def set_seed(seed):
 
 def create_data_path(args):
     logger.info("create data path...")
+    # model name share
+    if args.model_name.endswith('AE'):
+        model_name = 'AE'
+    else:
+        model_name = args.model_name
     # data_path
     feature_bit = ''.join([value[1] if value[0] == 1 else '0' for value in args.feature_sets.values()])
     # Remove trailing zeros from the feature bit string to ensure consistent feature set recognition
@@ -33,7 +38,7 @@ def create_data_path(args):
     # of the same feature set due to varying lengths of trailing zeros.
     feature_bit = feature_bit.rstrip('0')
 
-    data_path = f'{args.data_dir}/{args.model_name}-{args.neg_count}-{feature_bit}'
+    data_path = f'{args.data_dir}/{model_name}-{args.neg_count}-{feature_bit}'
     train_data_path = f'{data_path}/train.pickle'
     valid_data_path = f'{data_path}/valid.pickle'
     evaluate_data_path = f'{data_path}/evaluate.pickle'

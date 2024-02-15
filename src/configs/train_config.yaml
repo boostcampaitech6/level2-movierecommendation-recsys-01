@@ -1,6 +1,6 @@
 # run config
 seed:       42
-epochs:     1
+epochs:     10 #0
 batch_size: 64
 lr:         0.001
 optimizer:  adamw
@@ -24,8 +24,10 @@ feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Nu
 data_rebuild: False # True, False
 
 # model config
-model_name: FM # FM, DeepFM
+model_name: AE # FM, DeepFM, VAE
 emb_dim:    64
+latent_dim: 200
+encoder_dims: [600, ]
 
 # wandb config
 wandb:      False # True, False
