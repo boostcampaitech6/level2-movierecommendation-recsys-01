@@ -1,6 +1,6 @@
 # run config
 seed:       42
-epochs:     10 #0
+epochs:     100
 batch_size: 64
 lr:         0.001
 optimizer:  adamw
@@ -26,8 +26,8 @@ data_rebuild: False # True, False
 # model config
 model_name: AE # FM, DeepFM, VAE
 emb_dim:    64
-latent_dim: 200
-encoder_dims: [600, ]
+latent_dim: 256
+encoder_dims: [1024, 512]
 
 # wandb config
 wandb:      False # True, False
