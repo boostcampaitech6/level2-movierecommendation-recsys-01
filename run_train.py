@@ -87,12 +87,12 @@ def main(args: DictConfig):
 
         data_pipeline.save_data(train_data, train_path)
         data_pipeline.save_data(valid_data, valid_path)
-        data_pipeline.save_data(evaluate_data, evaluate_path)
+        data_pipeline.save_data_parquet(evaluate_data, evaluate_path)
     else:
         logging.info("using saved datasets...")
         train_data = data_pipeline.load_data(train_path)
         valid_data = data_pipeline.load_data(valid_path)
-        evaluate_data = data_pipeline.load_data(evaluate_path)
+        evaluate_data = data_pipeline.load_data_parquet(evaluate_path)
 
     # ordinal encoding
     logging.info("encode categorical features...")

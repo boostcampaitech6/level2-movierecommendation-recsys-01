@@ -107,6 +107,13 @@ class DataPipeline:
         with open(data_name, 'rb') as f:
             data = pickle.load(f)
         return data
+    
+    def save_data_parquet(self, data: pd.DataFrame, data_name):
+        data.to_parquet(data_name)
+
+    def load_data_parquet(self, data_name):
+        logger.info("load evaluate file...")
+        return pd.read_parquet(data_name)
 
     def encode_categorical_features(self, df, cat_features):
         if self.ordinal_encoder is None: # train-only
