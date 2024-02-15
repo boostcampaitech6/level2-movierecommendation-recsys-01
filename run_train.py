@@ -18,12 +18,12 @@ import hydra
 from omegaconf import DictConfig
 
 from src.data.datasets import (
-    DataPipeline, #FMDataset,
+    DataPipeline,
     )
 from src.data.FMdatasets import (
     FMDataPipeline, FMDataset,
     ) 
-from src.trainer import Trainer
+from src.train.FMtrainer import FMTrainer
 from src.utils import set_seed, create_data_path, save_submission
 
 import torch
@@ -120,7 +120,10 @@ def main(args: DictConfig):
     
     # Trainer 
     logging.info("make Trainer...")
-    trainer = Trainer(args, evaluate_data, data_pipeline, runname)
+    if args.model_name in ('FM', 'DeepFM'):
+        trainer = FMTrainer(args, evaluate_data, data_pipeline, runname)
+    else:
+        raise ValueError()
     trainer.run(train_dataloader, valid_dataloader)
 
     # Load Best Model

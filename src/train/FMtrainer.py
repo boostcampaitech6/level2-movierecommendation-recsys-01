@@ -16,16 +16,16 @@ from tqdm import tqdm
 import torch
 import wandb
 
-from .models.DeepFMModels import DeepFM
-from .models.FMModels import FM
-from .metrics import recall_at_k, ndcg_k
-from .data.features import make_year
+from ..models.DeepFMModels import DeepFM
+from ..models.FMModels import FM
+from ..metrics import recall_at_k, ndcg_k
+from ..data.features import make_year
 
 import logging
 logger = logging.getLogger(__name__)
 
 
-class Trainer():
+class FMTrainer():
     def __init__(self, args, evaluate_data, data_pipeline, runname) -> None:
 
         self.args = args
