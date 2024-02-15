@@ -14,6 +14,7 @@ class AbstractDataloader(metaclass=ABCMeta):
         self.test = dataset['test']
         self.umap = dataset['umap']
         self.smap = dataset['smap']
+        self.train_df = dataset['df']
         self.inv_umap = dataset['inv_umap']
         self.inv_smap = dataset['inv_smap']
         self.user_lst = dataset['user_lst']

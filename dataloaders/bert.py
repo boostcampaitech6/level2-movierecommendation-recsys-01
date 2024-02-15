@@ -73,7 +73,7 @@ class BertDataloader(AbstractDataloader):
 
     def _get_sub_loader(self):
         batch_size = self.args.test_batch_size
-        dataset = BertEvalDataset(self.train, self.test, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, mode='sub')
+        dataset = BertEvalDataset(self.train, self.test, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, train_df = self.train_df, mode='sub')
         dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,shuffle=False,pin_memory=True)
         return dataloader
 
@@ -130,7 +130,7 @@ class BertTrainDataset(data_utils.Dataset):
 
 
 class BertEvalDataset(data_utils.Dataset):
-    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, mode='eval'):
+    def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, train_df=None, mode='eval'):
         self.u2seq = u2seq
         self.users = sorted(self.u2seq.keys())
         self.u2answer = u2answer
@@ -138,6 +138,7 @@ class BertEvalDataset(data_utils.Dataset):
         self.mask_token = mask_token
         self.negative_samples = negative_samples
         self.mode = mode
+        self.train_df = train_df
         # print(self.u2seq[0], self.u2seq[11])
         # print(max(self.users))
         self.user_dict = {idx: key for idx, key in enumerate(self.u2seq.keys())}
@@ -147,6 +148,7 @@ class BertEvalDataset(data_utils.Dataset):
         return len(self.users)
 
     def __getitem__(self, index):
+        import pandas as pd
         user = self.users[index]
         # print(index, self.user_dict[index], self.users[self.user_dict[index]])
         seq = self.u2seq[user]
@@ -154,7 +156,11 @@ class BertEvalDataset(data_utils.Dataset):
         negs = self.negative_samples[user]
 
         candidates = answer + negs
-        if self.mode=='sub': candidates = negs
+        if self.mode=='sub': 
+            train_df = self.train_df
+            seen=train_df[train_df['user']==user]['item'].tolist()
+            candidates = train_df[~train_df['item'].isin(seen)]['item'].tolist()
+            
         labels = [1] * len(answer) + [0] * len(negs)
 
         seq = seq + [self.mask_token]

@@ -74,7 +74,8 @@ class AbstractDataset(metaclass=ABCMeta):
         df, umap, smap, inv_umap, inv_smap = self.densify_index(df)
         train, val, test = self.split_df(df, len(umap))
         user_lst = df['uid'].unique()
-        dataset = {'train': train,
+        dataset = {
+                   'train': train,
                    'val': val,
                    'test': test,
                    'umap': umap,
@@ -82,6 +83,7 @@ class AbstractDataset(metaclass=ABCMeta):
                    'inv_umap':inv_umap,
                    'inv_smap':inv_smap,
                    'user_lst': user_lst,
+                   'df': df,
                    }
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)
