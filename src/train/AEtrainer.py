@@ -8,7 +8,7 @@ from tqdm import tqdm
 import torch
 import wandb
 
-from ..models.AEModels import AE, VAE, MultiVAE
+from ..models.AEModels import AE
 from ..metrics import recall_at_k, ndcg_k
 from ..data.features import make_year
 #from ..loss import VAELoss, loss_function_vae
@@ -53,7 +53,7 @@ class AETrainer():
 
     def run(self, train_data_loader, valid_data_loader):
         logger.info("Run Trainer...")
-        patience = 10
+        patience = 5
         best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
 
         if self.args.optimizer == "adamw":
@@ -147,8 +147,28 @@ class AETrainer():
         return train_loss/len(train_data_loader), train_pred
 
     def validate(self, train_pred, valid_data_loader):
+        logger.info("Validation Start....")
+        self.model.eval()
         valid_loss = 0
-        return valid_loss
+
+        for i, (train_pred, valid_data) in enumerate(tqdm(zip(train_pred, valid_data_loader), total=len(train_pred))):
+            
+            train_pred = train_pred.to(self.device)
+
+            valid_interact = valid_data['interact'].to(self.device)
+            valid_all_mask = valid_data['interact_all_mask'].to(self.device)
+
+            # masking
+            masked_pred = train_pred[valid_all_mask] #pred * all_mask
+            masked_interact = valid_interact[valid_all_mask] #interact * all_mask
+
+            # loss
+            batch_loss = self.loss(masked_pred, masked_interact)
+            
+            # sum of batch loss
+            valid_loss += batch_loss.item()
+
+        return valid_loss/len(valid_data_loader)
 
     def evaluate(self, train_data_loader, valid_data_loader, k=10):
         recall_at_k = 0
