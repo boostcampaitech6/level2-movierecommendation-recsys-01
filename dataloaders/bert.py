@@ -74,7 +74,7 @@ class BertDataloader(AbstractDataloader):
     def _get_sub_loader(self):
         batch_size = self.args.test_batch_size
         dataset = BertEvalDataset(self.train, self.test, self.max_len, self.CLOZE_MASK_TOKEN, self.test_negative_samples, train_df = self.train_df, mode='sub')
-        dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,shuffle=False,pin_memory=True)
+        dataloader = data_utils.DataLoader(dataset, batch_size=batch_size,shuffle=False,pin_memory=True) #100개에서만 추천함, valid,test,train -> train_df
         return dataloader
 
 
@@ -131,16 +131,17 @@ class BertTrainDataset(data_utils.Dataset):
 
 class BertEvalDataset(data_utils.Dataset):
     def __init__(self, u2seq, u2answer, max_len, mask_token, negative_samples, train_df=None, mode='eval'):
-        self.u2seq = u2seq
-        self.users = sorted(self.u2seq.keys())
+        self.u2seq = u2seq #  영화 sequence
+        self.users = sorted(self.u2seq.keys()) 
         self.u2answer = u2answer
         self.max_len = max_len
         self.mask_token = mask_token
         self.negative_samples = negative_samples
         self.mode = mode
         self.train_df = train_df
-        # print(self.u2seq[0], self.u2seq[11])
-        # print(max(self.users))
+        print(self.u2seq[0])
+        print("!!!!!!!!!")
+        print(self.users)
         self.user_dict = {idx: key for idx, key in enumerate(self.u2seq.keys())}
         # print(self.user_dict)
 
@@ -149,17 +150,25 @@ class BertEvalDataset(data_utils.Dataset):
 
     def __getitem__(self, index):
         import pandas as pd
-        user = self.users[index]
+        user = self.users[index] 
         # print(index, self.user_dict[index], self.users[self.user_dict[index]])
         seq = self.u2seq[user]
         answer = self.u2answer[user]
         negs = self.negative_samples[user]
 
-        candidates = answer + negs
-        if self.mode=='sub': 
+        candidates = answer + negs # answer1개랑 + 100개 
+
+        if self.mode=='sub':  # 평가할 때는 전체 데이터에서 안 본 영화를 후보로 해야 함
+            import numpy as np
             train_df = self.train_df
-            seen=train_df[train_df['user']==user]['item'].tolist()
-            candidates = train_df[~train_df['item'].isin(seen)]['item'].tolist()
+            seen = train_df[train_df['uid'] == user]['sid'].tolist() # 
+
+            candidates = np.array([sid for sid in train_df['sid'].unique() if sid not in seen]) # 안 본 영화의 sid
+            print(train_df)
+            print('@')
+            print(train_df['sid'].nunique())
+            print(len(seen), len(candidates))
+            #print(user, candidates)
             
         labels = [1] * len(answer) + [0] * len(negs)
 

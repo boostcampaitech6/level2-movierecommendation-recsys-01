@@ -219,6 +219,7 @@ class AbstractTrainer(metaclass=ABCMeta):
                 scores = scores.gather(1, candidates)  # B x C
                 rank = (-scores).argsort(dim=1)
                 cut = rank[:, :10].detach().cpu().numpy()
+                print(cut)
                 # breakpoint()
                 # print(cut)
                 # print("@@@@@@@@")

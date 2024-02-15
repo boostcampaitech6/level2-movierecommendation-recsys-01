@@ -38,7 +38,6 @@ class ML2MDataset(AbstractDataset):
         print(file_path)
         df = pd.read_csv(file_path, header=None)
         df.columns = ['uid', 'sid','timestamp']
-        df=df[1:]
         return df
 
 
