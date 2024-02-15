@@ -213,6 +213,35 @@ class AETrainer():
             info = f.readlines()
         logger.info(info)
 
-    def inference(self, k=10):
-        prediction = [0]
+    def inference(self, evaluate_data, k=10):
+        logger.info("Inference Start....")
+        self.model.eval()
+        
+        users = self.data_pipeline.users
+        items = self.data_pipeline.items
+
+        interact_tensor = torch.tensor(evaluate_data['interact']).to(self.device) 
+        pos_mask_tensor = torch.tensor(evaluate_data['interact_pos_mask'])
+
+        prediction = []
+
+        for i, user in enumerate(tqdm(users)): 
+            user_interact = interact_tensor[i,:]
+            inv_pos_mask = ~(pos_mask_tensor[i,:])
+
+            user_pred = self.model(user_interact).detach().cpu()
+            user_pred = user_pred * inv_pos_mask
+
+            # find high prob index
+            high_index = np.argpartition(user_pred.numpy(), -k)[-k:]
+
+            # find high prob item by index
+            user_recom = items[high_index]
+            prediction.append(user_recom)
+
+        # expand_dims
+        prediction = np.expand_dims(np.concatenate(prediction, axis=0), axis=-1)
+        user_ids = np.expand_dims(np.repeat(users, 10), axis=-1).astype(int)
+
+        prediction = np.concatenate([user_ids, prediction], axis=1)
         return prediction
