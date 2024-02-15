@@ -99,6 +99,7 @@ class DataPipeline:
         pass
 
     def save_data(self, data, data_name):
+        logger.info(f"saving {data_name}")
         with open(data_name, 'wb') as f:
             pickle.dump(data, f)
 
@@ -109,6 +110,7 @@ class DataPipeline:
         return data
     
     def save_data_parquet(self, data: pd.DataFrame, data_name):
+        logger.info(f"saving {data_name}")
         data.to_parquet(data_name)
 
     def load_data_parquet(self, data_name):
