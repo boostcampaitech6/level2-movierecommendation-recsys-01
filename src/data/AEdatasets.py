@@ -28,10 +28,24 @@ class AEDataPipeline(DataPipeline):
         df = df[['user', 'item', 'rating']]
         return df
 
+    def _concat_neg_data(self, df):
+        logger.info('concat all negative data...')
+        users = df.user.unique()
+        items = set(df.item.unique())
+        # positive rating
+        df['rating'] = 1
+        neg_data = []
+        pos_items = df.groupby('user')['item'].agg(set)
+        for user in tqdm(users):
+            for item in (items-pos_items[user]):
+                neg_data.append([user,item,0,0])
+        df = pd.concat([df, pd.DataFrame(neg_data, columns=df.columns)])
+        return df
+
     def preprocess_data(self):
         logger.info("preprocess data...")
         df = self._read_data()
-        df = self._neg_sampling(df)
+        df = self._concat_neg_data(df)
         df = self._feature_selection(df)
         return df 
     
@@ -46,6 +60,23 @@ class AEDataPipeline(DataPipeline):
         all_mask = interact.notnull() # pos+neg
         pos_mask = interact == 1 # pos only
         return all_mask, pos_mask
+
+#    def efficient_split_data(self, df):
+#        # not completed
+#        users = df.user.unique()
+#        items = set(df.item.unique())
+#        # positive rating
+#        df['rating'] = 1
+#        neg_data = []
+#        pos_items = df.groupby('user')['item'].agg(set)
+#        split_ratio = .2
+#        for user in tqdm(users):
+#
+#            for item in (items-pos_items[user]):
+#                neg_data.append([user,item,0,0])
+#        df = pd.concat([df, pd.DataFrame(neg_data, columns=df.columns)])
+#        return df
+
 
     def split_data(self, df):
         logger.info('split data...')
@@ -84,9 +115,9 @@ class AEDataPipeline(DataPipeline):
         valid_pos_items = valid_df[valid_df['rating']==1].groupby('user')['item'].agg(set).sort_index().to_dict()
         full_pos_items = df[df['rating']==1].groupby('user')['item'].agg(set).sort_index().to_dict()
 
-        train_data = {'interact': train_interact, 'interact_all_mask': train_interact_all_mask,
+        train_data = {'interact': full_interact, 'interact_all_mask': train_interact_all_mask,
                       'interact_pos_mask': train_interact_pos_mask, 'pos_items': train_pos_items}
-        valid_data = {'interact': valid_interact, 'interact_all_mask': valid_interact_all_mask,
+        valid_data = {'interact': full_interact, 'interact_all_mask': valid_interact_all_mask,
                       'interact_pos_mask': valid_interact_pos_mask, 'pos_items': valid_pos_items}
         full_data = {'interact': full_interact, 'interact_all_mask': full_interact_all_mask,
                       'interact_pos_mask': full_interact_pos_mask, 'pos_items': full_pos_items}
