@@ -8,10 +8,10 @@ from tqdm import tqdm
 import torch
 import wandb
 
-from ..models.AEModels import AE, DAE
+from ..models.AEModels import AE, DAE, VAE
 from ..metrics import recall_at_k, ndcg_k
 from ..data.features import make_year
-#from ..loss import VAELoss, loss_function_vae
+from ..loss import VAELoss
 
 import logging
 logger = logging.getLogger(__name__)
@@ -35,18 +35,17 @@ class AETrainer():
         elif self.args.model_name == "DAE":
             self.model = DAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims, 
                 self.args.noise_factor, self.args.dropout)
-#        elif self.args.model_name == "VAE":
-#            self.model = VAE(evaluate_data['X'].shape[1], self.args.latent_dim, self.args.hidden_layers)
-            #self.model = VAE(evaluate_data['X'].shape[1], self.args.latent_dim, self.args.hidden_layers)
-            #self.model = MultiVAE(evaluate_data['X'].shape[1], self.args.p_dims)
+        elif self.args.model_name == "VAE":
+            self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
+                self.args.dropout)
         else:
             raise Exception
 
         self.model.to(self.device)
         if self.args.model_name in ('AE', 'DAE'):
             self.loss = torch.nn.BCEWithLogitsLoss()
-        elif self.args.model_name in ("VAE"):
-            self.loss = torch.nn.BCEWithLogitsLoss()#loss_function_vae#VAELoss()
+        elif self.args.model_name in ("VAE",):
+            self.loss = VAELoss()
         else:
             raise Exception
 
@@ -97,7 +96,8 @@ class AETrainer():
                     }
                 )
             
-            if valid_loss < best_loss:
+            #if valid_loss < best_loss:
+            if valid_recall_k > best_recall_k:
                 best_loss, best_epoch, best_ndcg_k, best_recall_k = valid_loss, epoch, valid_ndcg_k, valid_recall_k
                 endurance = 1
 
@@ -128,15 +128,21 @@ class AETrainer():
 
             interact = train_data['interact'].to(self.device)
             all_mask = train_data['interact_all_mask'].to(self.device)
-
-            pred = self.model(interact)
+            
+            if self.args.model_name == ('VAE',):
+                pred, mean, logvar = self.model(interact)
+            else:
+                pred = self.model(interact)
 
             # masking
             masked_pred = pred[all_mask] #pred * all_mask
             masked_interact = interact[all_mask] #interact * all_mask
 
             # loss
-            batch_loss = self.loss(masked_pred, masked_interact)
+            if self.args.model_name == ('VAE',):
+                batch_loss = self.loss(masked_pred, masked_interact, mean, logvar)
+            else:
+                batch_loss = self.loss(masked_pred, masked_interact)
             
             # backprop
             self.optimizer.zero_grad()
@@ -145,7 +151,10 @@ class AETrainer():
             
             # sum of batch loss
             train_loss += batch_loss.item()
-            train_pred.append(pred.detach().cpu())
+            if self.args.model_name in ('VAE',):
+                train_pred.append([pred.detach().cpu(), mean.detach().cpu(), logvar.detach().cpu()])
+            else:
+                train_pred.append(pred.detach().cpu())
         
         return train_loss/len(train_data_loader), train_pred
 
@@ -156,6 +165,8 @@ class AETrainer():
 
         for i, (train_pred, valid_data) in enumerate(tqdm(zip(train_pred, valid_data_loader), total=len(train_pred))):
             
+            if self.args.model_name in ('VAE',):
+                train_pred, train_mean, train_logvar = train_pred
             train_pred = train_pred.to(self.device)
 
             valid_interact = valid_data['interact'].to(self.device)
@@ -166,7 +177,10 @@ class AETrainer():
             masked_interact = valid_interact[valid_all_mask] #interact * all_mask
 
             # loss
-            batch_loss = self.loss(masked_pred, masked_interact)
+            if self.args.model_name in ('VAE',):
+                batch_loss = self.loss(masked_pred, masked_interact, train_mean, train_logvar)
+            else:
+                batch_loss = self.loss(masked_pred, masked_interact)
             
             # sum of batch loss
             valid_loss += batch_loss.item()
@@ -186,7 +200,11 @@ class AETrainer():
             train_pos_mask = train_data['interact_pos_mask']
             
             # prediction
-            train_pred = self.model(train_interact).detach().cpu()
+            if self.args.model_name in ('VAE',):
+                train_pred, _, _ = self.model(train_interact)
+                train_pred = train_pred.detach().cpu()
+            else:
+                train_pred = self.model(train_interact).detach().cpu()
 
             # masking
             inv_train_pos_pred = train_pred * ~train_pos_mask #pred * all_mask
@@ -230,7 +248,13 @@ class AETrainer():
             user_interact = interact_tensor[i,:]
             inv_pos_mask = ~(pos_mask_tensor[i,:])
 
-            user_pred = self.model(user_interact).detach().cpu()
+            # prediction
+            if self.args.model_name in ('VAE',):
+                user_pred, _, _ = self.model(user_interact)
+                user_pred = user_pred.detach().cpu()
+            else:
+                user_pred = self.model(user_interact).detach().cpu()
+
             user_pred = user_pred * inv_pos_mask
 
             # find high prob index

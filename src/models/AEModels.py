@@ -18,7 +18,8 @@ class AE(nn.Module):
         encoder, input_dim = [], num_items
         for output_dim in self.hidden_layers:
             encoder.append(nn.Linear(input_dim, output_dim))
-            #encoder.append(nn.Sigmoid()) #nn.ReLU()
+            encoder.append(nn.Tanh())
+            encoder.append(nn.Dropout(p=self.dropout_ratio))
             input_dim = output_dim
         self.encoder = nn.ModuleList(encoder)
 
@@ -26,12 +27,9 @@ class AE(nn.Module):
 
         # decoder (x ~ gausian)
         decoder, input_dim = [], latent_dim
-        for output_dim in self.hidden_layers+[self.num_items]:
+        for i, output_dim in enumerate(self.hidden_layers+[self.num_items]):
             decoder.append(nn.Linear(input_dim, output_dim))
-            encoder.append(nn.Dropout(p=self.dropout_ratio))
-            #decoder.append(nn.Sigmoid()) #nn.ReLU()
             input_dim = output_dim
-        #decoder.pop()
         self.decoder = nn.ModuleList(decoder)
 
         # initialize parameters
@@ -40,7 +38,8 @@ class AE(nn.Module):
     def _init_params(self):
         for child in self.children():
             if isinstance(child, nn.Linear):
-                nn.init.kaiming_uniform_(child.weight)
+                #nn.init.kaiming_uniform_(child.weight)
+                nn.init.xavier_uniform_(child.weight)
                 nn.init.uniform_(child.bias)
 
     def encode(self, x):
@@ -74,3 +73,30 @@ class DAE(AE):
         latent = self.encode(x)
         output = self.decode(latent)
         return output
+
+class VAE(AE):
+
+    def __init__(self, num_items, latent_dim=200, hidden_layers=[600,], dropout=.5):
+        super().__init__(num_items, latent_dim, hidden_layers, dropout)
+        self.code_mean = nn.Linear(self.hidden_layers[-1], self.latent_dim)
+        self.code_logvar = nn.Linear(self.hidden_layers[-1], self.latent_dim)
+
+    def encode(self, x):
+        for layer in self.encoder:
+            x = layer(x)
+        return self.code_mean(x), self.code_logvar(x)
+
+    def reparameterize(self, mean, logvar):
+        stddev = torch.exp(.5 * logvar)
+        if self.training:
+            eps = torch.randn_like(stddev)
+        else:
+            eps = 0
+        z = mean + stddev * eps
+        return z
+
+    def forward(self, x):
+        mean, logvar = self.encode(x)
+        z = self.reparameterize(mean, logvar)
+        output = self.decode(z)
+        return output, mean, logvar
