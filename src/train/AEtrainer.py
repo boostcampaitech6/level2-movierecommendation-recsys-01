@@ -37,6 +37,9 @@ class AETrainer():
         elif self.args.model_name in ("VAE", "MultiVAE"):
             self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
                 self.args.dropout)
+        elif self.args.model_name in ("VDAE", "MultiVDAE"):
+            self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
+                self.args.noise_factor, self.args.dropout, True)
         else:
             raise Exception
 
@@ -45,7 +48,7 @@ class AETrainer():
             self.loss = torch.nn.BCEWithLogitsLoss()
         if self.args.model_name in ('MultiAE', 'MultiDAE'):
             self.loss = MultiAELoss()
-        elif self.args.model_name in ("VAE", 'MultiVAE'):
+        elif self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
             self.loss = VAELoss(args)
         else:
             raise Exception
@@ -98,8 +101,8 @@ class AETrainer():
                     }
                 )
             
-            #if valid_loss < best_loss:
-            if valid_recall_k > best_recall_k:
+            if valid_loss < best_loss:
+            # if valid_recall_k > best_recall_k:
                 best_loss, best_epoch, best_ndcg_k, best_recall_k = valid_loss, epoch, valid_ndcg_k, valid_recall_k
                 endurance = 1
 
@@ -131,7 +134,7 @@ class AETrainer():
             interact = train_data['interact'].to(self.device)
             all_mask = train_data['interact_all_mask'].to(self.device)
             
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 pred, mean, logvar = self.model(interact)
             else:
                 pred = self.model(interact)
@@ -141,7 +144,7 @@ class AETrainer():
             masked_interact = interact[all_mask] #interact * all_mask
 
             # loss
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 batch_loss = self.loss(masked_pred, masked_interact, mean, logvar, True)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
@@ -153,7 +156,7 @@ class AETrainer():
             
             # sum of batch loss
             train_loss += batch_loss.item()
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 train_pred.append([pred.detach().cpu(), mean.detach().cpu(), logvar.detach().cpu()])
             else:
                 train_pred.append(pred.detach().cpu())
@@ -167,7 +170,7 @@ class AETrainer():
 
         for i, (train_pred, valid_data) in enumerate(tqdm(zip(train_pred, valid_data_loader), total=len(train_pred))):
             
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 train_pred, train_mean, train_logvar = train_pred
             train_pred = train_pred.to(self.device)
 
@@ -179,7 +182,7 @@ class AETrainer():
             masked_interact = valid_interact[valid_all_mask] #interact * all_mask
 
             # loss
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 batch_loss = self.loss(masked_pred, masked_interact, train_mean, train_logvar, False)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
@@ -202,7 +205,7 @@ class AETrainer():
             train_pos_mask = train_data['interact_pos_mask']
             
             # prediction
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 train_pred, _, _ = self.model(train_interact)
                 train_pred = train_pred.detach().cpu()
             else:
@@ -251,7 +254,7 @@ class AETrainer():
             inv_pos_mask = ~(pos_mask_tensor[i,:])
 
             # prediction
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 user_pred, _, _ = self.model(user_interact)
                 user_pred = user_pred.detach().cpu()
             else:

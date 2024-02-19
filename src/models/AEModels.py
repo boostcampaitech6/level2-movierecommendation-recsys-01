@@ -19,7 +19,6 @@ class AE(nn.Module):
         for output_dim in self.hidden_layers:
             encoder.append(nn.Linear(input_dim, output_dim))
             encoder.append(nn.Tanh())
-            encoder.append(nn.Dropout(p=self.dropout_ratio))
             input_dim = output_dim
         self.encoder = nn.ModuleList(encoder)
 
@@ -63,6 +62,8 @@ class DAE(AE):
     def __init__(self, num_items, latent_dim=200, hidden_layers=[600,], noise_factor=0.5, dropout=.5):
         super().__init__(num_items, latent_dim, hidden_layers, dropout)
         self.noise_factor = noise_factor
+        self.dropout_ratio = dropout
+        self.dropout = nn.Dropout(p=self.dropout_ratio)
 
     def add_noise(self, x):
         return x + self.noise_factor * x.new_tensor(torch.randn_like(x))
@@ -70,6 +71,7 @@ class DAE(AE):
     def forward(self, x):
         if self.training:
             x = self.add_noise(x)
+            x = self.dropout(x)
         latent = self.encode(x)
         output = self.decode(latent)
         return output
@@ -77,10 +79,17 @@ class DAE(AE):
 
 class VAE(AE):
 
-    def __init__(self, num_items, latent_dim=200, hidden_layers=[600,], dropout=.5):
+    def __init__(self, num_items, latent_dim=200, hidden_layers=[600,], noise_factor=0.5, dropout=.5, denosing=False):
         super().__init__(num_items, latent_dim, hidden_layers, dropout)
         self.code_mean = nn.Linear(self.hidden_layers[-1], self.latent_dim)
         self.code_logvar = nn.Linear(self.hidden_layers[-1], self.latent_dim)
+        self.denosing = denosing
+        if self.denosing:
+            self.noise_factor = noise_factor
+            self.dropout = nn.Dropout(p=self.dropout_ratio)
+
+    def add_noise(self, x):
+        return x + self.noise_factor * x.new_tensor(torch.randn_like(x))
 
     def encode(self, x):
         for layer in self.encoder:
@@ -97,6 +106,9 @@ class VAE(AE):
         return z
 
     def forward(self, x):
+        if self.denosing and self.training:
+            x = self.add_noise(x)
+            x = self.dropout(x)
         mean, logvar = self.encode(x)
         z = self.reparameterize(mean, logvar)
         output = self.decode(z)
