@@ -146,7 +146,7 @@ def main(args: DictConfig):
         trainer.run(train_dataloader, valid_dataloader)
     elif args.model_name.endswith('AE'):
         trainer = AETrainer(args, evaluate_data, data_pipeline, runname)
-        trainer.run(train_dataloader, valid_dataloader, valid_data)
+        # trainer.run(train_dataloader, valid_dataloader, valid_data)
     else:
         raise ValueError()
 
@@ -161,7 +161,7 @@ def main(args: DictConfig):
         # padding for additional categorical features except user and item
         padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
         prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
-    elif args.model_name in ('AE', 'DAE', 'VAE'):
+    elif args.model_name in ('AE', 'DAE', 'VAE', 'MultiVAE', 'MultiAE', 'MultiDAE'):
         prediction = trainer.inference(evaluate_data)
     save_submission(prediction[:, :2], args, runname)
 

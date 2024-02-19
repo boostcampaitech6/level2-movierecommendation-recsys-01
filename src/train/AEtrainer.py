@@ -10,8 +10,7 @@ import wandb
 
 from ..models.AEModels import AE, DAE, VAE
 from ..metrics import recall_at_k, ndcg_k
-from ..data.features import make_year
-from ..loss import VAELoss
+from ..loss import MultiAELoss, VAELoss
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,13 +28,13 @@ class AETrainer():
         self.best_model_dir = f"{self.args.model_dir}/{runname}"
         Path(self.best_model_dir).mkdir(exist_ok=True, parents=True)
 
-        if self.args.model_name == "AE":
+        if self.args.model_name in ("AE", "MultiAE"):
             self.model = AE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
                 self.args.dropout)
-        elif self.args.model_name == "DAE":
+        elif self.args.model_name in ("DAE", "MultiDAE"):
             self.model = DAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims, 
                 self.args.noise_factor, self.args.dropout)
-        elif self.args.model_name == "VAE":
+        elif self.args.model_name in ("VAE", "MultiVAE"):
             self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
                 self.args.dropout)
         else:
@@ -44,8 +43,10 @@ class AETrainer():
         self.model.to(self.device)
         if self.args.model_name in ('AE', 'DAE'):
             self.loss = torch.nn.BCEWithLogitsLoss()
-        elif self.args.model_name in ("VAE",):
-            self.loss = VAELoss()
+        if self.args.model_name in ('MultiAE', 'MultiDAE'):
+            self.loss = MultiAELoss()
+        elif self.args.model_name in ("VAE", 'MultiVAE'):
+            self.loss = VAELoss(args)
         else:
             raise Exception
 
@@ -56,7 +57,7 @@ class AETrainer():
 
     def run(self, train_data_loader, valid_data_loader, valid_data):
         logger.info("Run Trainer...")
-        patience = 5
+        patience = 10 
         best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
 
         if self.args.optimizer == "adamw":
@@ -82,6 +83,7 @@ class AETrainer():
             train_loss, train_pred = self.train(train_data_loader)
             valid_loss = self.validate(train_pred, valid_data_loader)
             valid_recall_k, valid_ndcg_k = self.evaluate(train_data_loader, valid_data)
+            if self.args.kl_anneal: logger.info(f'anneal: {self.loss.beta}')
             logger.info(f"epoch: {epoch+1} train_loss: {train_loss:.10f}, valid_loss: {valid_loss:.10f}, valid_ndcg: {valid_ndcg_k:.10f}, valid_recall_k: {valid_recall_k:.10f}")
 
             # wandb logging
@@ -129,7 +131,7 @@ class AETrainer():
             interact = train_data['interact'].to(self.device)
             all_mask = train_data['interact_all_mask'].to(self.device)
             
-            if self.args.model_name == ('VAE',):
+            if self.args.model_name in ('VAE', 'MultiVAE'):
                 pred, mean, logvar = self.model(interact)
             else:
                 pred = self.model(interact)
@@ -139,8 +141,8 @@ class AETrainer():
             masked_interact = interact[all_mask] #interact * all_mask
 
             # loss
-            if self.args.model_name == ('VAE',):
-                batch_loss = self.loss(masked_pred, masked_interact, mean, logvar)
+            if self.args.model_name in ('VAE', 'MultiVAE'):
+                batch_loss = self.loss(masked_pred, masked_interact, mean, logvar, True)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
             
@@ -151,7 +153,7 @@ class AETrainer():
             
             # sum of batch loss
             train_loss += batch_loss.item()
-            if self.args.model_name in ('VAE',):
+            if self.args.model_name in ('VAE', 'MultiVAE'):
                 train_pred.append([pred.detach().cpu(), mean.detach().cpu(), logvar.detach().cpu()])
             else:
                 train_pred.append(pred.detach().cpu())
@@ -165,7 +167,7 @@ class AETrainer():
 
         for i, (train_pred, valid_data) in enumerate(tqdm(zip(train_pred, valid_data_loader), total=len(train_pred))):
             
-            if self.args.model_name in ('VAE',):
+            if self.args.model_name in ('VAE', 'MultiVAE'):
                 train_pred, train_mean, train_logvar = train_pred
             train_pred = train_pred.to(self.device)
 
@@ -177,8 +179,8 @@ class AETrainer():
             masked_interact = valid_interact[valid_all_mask] #interact * all_mask
 
             # loss
-            if self.args.model_name in ('VAE',):
-                batch_loss = self.loss(masked_pred, masked_interact, train_mean, train_logvar)
+            if self.args.model_name in ('VAE', 'MultiVAE'):
+                batch_loss = self.loss(masked_pred, masked_interact, train_mean, train_logvar, False)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
             
@@ -200,7 +202,7 @@ class AETrainer():
             train_pos_mask = train_data['interact_pos_mask']
             
             # prediction
-            if self.args.model_name in ('VAE',):
+            if self.args.model_name in ('VAE', 'MultiVAE'):
                 train_pred, _, _ = self.model(train_interact)
                 train_pred = train_pred.detach().cpu()
             else:
@@ -249,7 +251,7 @@ class AETrainer():
             inv_pos_mask = ~(pos_mask_tensor[i,:])
 
             # prediction
-            if self.args.model_name in ('VAE',):
+            if self.args.model_name in ('VAE', 'MultiVAE'):
                 user_pred, _, _ = self.model(user_interact)
                 user_pred = user_pred.detach().cpu()
             else:

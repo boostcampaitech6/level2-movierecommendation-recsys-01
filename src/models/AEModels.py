@@ -74,6 +74,7 @@ class DAE(AE):
         output = self.decode(latent)
         return output
 
+
 class VAE(AE):
 
     def __init__(self, num_items, latent_dim=200, hidden_layers=[600,], dropout=.5):
