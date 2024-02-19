@@ -6,30 +6,14 @@ from tqdm import tqdm
 
 import torch
 
-from ..models.AEModels import AE, DAE, VAE, MultiVAE
+from ..models.AEModels import AE, DAE, VAE
 from ..metrics import recall_at_k, ndcg_k
-from ..loss import MultiAELoss, VAELoss, MultiVAELoss
+from ..loss import MultiAELoss, VAELoss
 
 class AEInferencer:
 
     def __init__(self, args, evaluate_data, data_pipeline, runname):
 
-#        self.args = args
-#        self.device = torch.device("cuda")
-#        self.num_features = data_pipeline.num_features
-#        self.cat_features_size = data_pipeline.cat_features_size
-#
-#        self.model = None
-#        self.train_actual = None
-#        self.valid_actual = None
-#
-#        self._load_model()
-#
-#        self.train_actual = None
-#        self.valid_actual = None
-#        self._set_actuals(train_dataloader, valid_dataloader)
-#
-#        self.total_interaction = torch.tensor(evaluate_data.values).to(self.device)
         self.args = args
         self.device = torch.device(self.args.device)
         self.data_pipeline = data_pipeline
@@ -41,48 +25,20 @@ class AEInferencer:
         self.evaluate_data = evaluate_data
         self._load_model()
 
-#    def _actual_interaction_dict(self, X):
-#        offset = len(self.num_features)
-#        return pd.DataFrame(X[:, offset:offset+2], columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
-#
-#    def _set_actuals(self, train_dataloader, valid_dataloader):
-#        print('set actuals...')
-#
-#        train_pos_X, valid_pos_X = [], []
-#        for data in train_dataloader:
-#            positive_index = torch.where(data['y'][:,0] == 1)
-#            train_pos_X.append(data['X'][positive_index])
-#
-#        for data in train_dataloader:
-#            positive_index = torch.where(data['y'][:,0] == 1)
-#            valid_pos_X.append(data['X'][positive_index])
-#
-#        train_pos_X = np.concatenate(train_pos_X, axis=0)
-#        valid_pos_X = np.concatenate(valid_pos_X, axis=0)
-#
-#        self.train_actual = self._actual_interaction_dict(train_pos_X)
-#        self.valid_actual = self._actual_interaction_dict(valid_pos_X)
-
     def _load_model(self):
         print('load best model...')
-        if self.args.model_name == "AE":
+        if self.args.model_name in ("AE", "MultiAE"):
             self.model = AE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
                 self.args.dropout)
-        elif self.args.model_name == "DAE":
+        elif self.args.model_name in ("DAE", "MultiDAE"):
             self.model = DAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims, 
                 self.args.noise_factor, self.args.dropout)
-        elif self.args.model_name == "MultiAE":
-            self.model = AE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
-                self.args.dropout)
-        elif self.args.model_name == "MultiDAE":
-            self.model = DAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims, 
-                self.args.noise_factor, self.args.dropout)
-        elif self.args.model_name == "VAE":
+        elif self.args.model_name in ("VAE", "MultiVAE"):
             self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
                 self.args.dropout)
-        elif self.args.model_name == "MultiVAE":
+        elif self.args.model_name in ("VDAE", "MultiVDAE"):
             self.model = VAE(self.data_pipeline.items.shape[0], self.args.latent_dim, self.args.encoder_dims,
-                self.args.dropout)
+                self.args.noise_factor, self.args.dropout, True)
         else:
             raise Exception
 
@@ -97,40 +53,6 @@ class AEInferencer:
             info = f.readlines()
         print(''.join(info))
 
-#    def inference(self, k=10):
-#        print("Inference Start....")
-#        self.model.eval()
-#
-#        num_users = self.cat_features_size['user']
-#        num_items = self.cat_features_size['item']
-#        offset = len(self.num_features)
-#        prediction = []
-#
-#        print("Predict all users and items interaction....")
-#        users = self.total_interaction[:, offset].unique().detach().cpu().numpy()
-#        for idx, user in enumerate(tqdm(users)):
-#            start_idx, end_idx = idx * num_items, (idx+1) * num_items
-#            user_X = self.total_interaction[start_idx:end_idx, :]
-#            user_items = user_X.detach().cpu().numpy()[:, offset+1]
-#            user_mask = torch.tensor([0 if (
-#                item.item() in self.train_actual[int(user)]) or (item.item() in self.valid_actual[int(user)]) else 1 for item in user_items], dtype=int)
-#            
-#            user_pred = self.model(user_X.float()).detach().cpu()
-#            user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
-#            
-#            # find high prob index
-#            high_index = np.argpartition(user_pred.numpy(), -k)[-k:]
-#            # find high prob item by index
-#            user_recom = user_items[high_index]
-#            prediction.append(user_recom)
-#        
-#        # expand_dims
-#        prediction = np.expand_dims(np.concatenate(prediction, axis=0), axis=-1)
-#        user_ids = np.expand_dims(np.repeat(users, 10), axis=-1).astype(int)
-#
-#        prediction = np.concatenate([user_ids, prediction], axis=1)
-#
-#        return prediction
     def inference(self, evaluate_data, k=10):
         print("Inference Start....")
         self.model.eval()
@@ -141,6 +63,7 @@ class AEInferencer:
         interact_tensor = torch.tensor(evaluate_data['interact']).to(self.device) 
         pos_mask_tensor = torch.tensor(evaluate_data['interact_pos_mask'])
 
+        recommendation = []
         prediction = []
 
         for i, user in enumerate(tqdm(users)): 
@@ -148,7 +71,7 @@ class AEInferencer:
             inv_pos_mask = ~(pos_mask_tensor[i,:])
 
             # prediction
-            if self.args.model_name in ('VAE', 'MultiVAE'):
+            if self.args.model_name in ('VAE', 'MultiVAE', 'VDAE', 'MultiVDAE'):
                 user_pred, _, _ = self.model(user_interact)
                 user_pred = user_pred.detach().cpu()
             else:
@@ -161,11 +84,15 @@ class AEInferencer:
 
             # find high prob item by index
             user_recom = items[high_index]
-            prediction.append(user_recom)
+            recommendation.append(user_recom)
+            prediction.append(user_pred.numpy())
 
         # expand_dims
-        prediction = np.expand_dims(np.concatenate(prediction, axis=0), axis=-1)
+        recommendation = np.expand_dims(np.concatenate(recommendation, axis=0), axis=-1)
+        prediction = np.array(prediction)
         user_ids = np.expand_dims(np.repeat(users, 10), axis=-1).astype(int)
 
-        prediction = np.concatenate([user_ids, prediction], axis=1)
-        return prediction
+        recommendation = np.concatenate([user_ids, recommendation], axis=1)
+        prediction = pd.DataFrame(prediction, index=users, columns=items)
+
+        return recommendation, prediction

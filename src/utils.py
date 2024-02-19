@@ -52,3 +52,7 @@ def save_submission(prediction, args, runname):
     submission_df.iloc[:,:] = prediction
     submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)
 
+def save_all_scores(all_score_df, args, runname):
+    logger.info("save score dataframe...")
+    all_score_df.columns = all_score_df.columns.astype(str)
+    all_score_df.to_parquet(f'{args.submit_dir}/{runname}-all_score.gzip', compression='gzip')
