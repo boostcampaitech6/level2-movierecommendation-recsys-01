@@ -19,14 +19,18 @@ class MultiAELoss(nn.Module):
 class VAELoss(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.loss = nn.BCEWithLogitsLoss()
+
+        if args.model_name.startswith('Multi'):
+            self.loss = lambda pred,true: -torch.mean(torch.sum(nn.functional.log_softmax(pred, -1) * true, -1))
+        else:
+            self.loss = nn.BCEWithLogitsLoss()
+
         self.kl_anneal = args.kl_anneal
         if self.kl_anneal:
             self.anneal_beta_max = args.anneal_beta_max
             self.anneal_total_steps = args.anneal_total_steps # batch_size * epochs
             self.beta = 0
             self.update_count = 0
-
 
     def forward(self, pred, true, mean, logvar, train=False):
         # 재구성 손실
@@ -35,10 +39,16 @@ class VAELoss(nn.Module):
         kl_distance = -0.5 * torch.mean(
             torch.sum(1 + logvar - mean.pow(2) - logvar.exp(), dim=1))
 
-        if self.kl_anneal:
+        if self.kl_anneal and train:
             total_loss = recon_loss + self.beta * kl_distance
-            self.set_beta(train)
+            self.set_beta()
+        elif self.kl_anneal and not train: # val loss 비교를 위해
+            total_loss = recon_loss + kl_distance
         else:
             total_loss = recon_loss + kl_distance
 
         return total_loss
+
+    def set_beta(self):
+        self.beta = min(self.anneal_beta_max, self.update_count/self.anneal_total_steps)
+        self.update_count += 1 

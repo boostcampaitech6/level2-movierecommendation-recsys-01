@@ -146,7 +146,7 @@ def main(args: DictConfig):
         trainer.run(train_dataloader, valid_dataloader)
     elif args.model_name.endswith('AE'):
         trainer = AETrainer(args, evaluate_data, data_pipeline, runname)
-        # trainer.run(train_dataloader, valid_dataloader, valid_data)
+        trainer.run(train_dataloader, valid_dataloader, valid_data)
     else:
         raise ValueError()
 
