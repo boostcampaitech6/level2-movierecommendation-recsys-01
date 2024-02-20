@@ -7,12 +7,35 @@ import torch.nn as nn
 
 
 class MultiAELoss(nn.Module):
+
     def __init__(self):
         super().__init__()
 
     def forward(self, pred, true):
         # 재구성 손실
         recon_loss = -torch.mean(torch.sum(nn.functional.log_softmax(pred, -1) * true, -1))
+        return recon_loss 
+
+
+class ConfidenceAELoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, pred, true, confidence):
+        bce_loss = nn.functional.binary_cross_entropy_with_logits(pred, true, reduction='none')
+        weighted_bce_loss = confidence * bce_loss
+        recon_loss = torch.mean(torch.sum(weighted_bce_loss, -1))
+        return recon_loss 
+
+
+class MultiConfidenceAELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, pred, true, confidence):
+        # 재구성 손실
+        recon_loss = -torch.mean(torch.sum(nn.functional.log_softmax(pred, -1) * true * confidence, -1))
         return recon_loss 
 
 
@@ -45,7 +68,7 @@ class VAELoss(nn.Module):
         elif self.kl_anneal and not train: # val loss 비교를 위해
             total_loss = recon_loss + kl_distance
         else:
-            total_loss = recon_loss + kl_distance
+            total_loss = recon_loss + kl_distance #0.3 * kl_distance
 
         return total_loss
 

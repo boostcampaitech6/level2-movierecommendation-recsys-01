@@ -10,7 +10,7 @@ import wandb
 
 from ..models.AEModels import AE, DAE, VAE
 from ..metrics import recall_at_k, ndcg_k
-from ..loss import MultiAELoss, VAELoss
+from ..loss import MultiAELoss, VAELoss, ConfidenceAELoss, MultiConfidenceAELoss
 
 import logging
 logger = logging.getLogger(__name__)
@@ -43,10 +43,21 @@ class AETrainer():
         else:
             raise Exception
 
+        self.confidence_standard = self.args.confidence if self.args.confidence != 'None' else None
+        print(self.confidence_standard)
         self.model.to(self.device)
-        if self.args.model_name in ('AE', 'DAE'):
+
+        if (self.args.model_name in ('AE', 'DAE')) and self.confidence_standard:
+            print('Confidence Loss used')
+            self.loss = ConfidenceAELoss()
+            self.confidence_array = torch.tensor(self.data_pipeline.confidence_array).to(self.device)
+        elif self.args.model_name in ('AE', 'DAE'):
             self.loss = torch.nn.BCEWithLogitsLoss()
-        if self.args.model_name in ('MultiAE', 'MultiDAE'):
+        elif self.args.model_name in ('MultiAE', 'MultiDAE') and self.confidence_standard:
+            print('Confidence Loss used')
+            self.loss = MultiConfidenceAELoss()
+            self.confidence_array = torch.tensor(self.data_pipeline.confidence_array).to(self.device)
+        elif self.args.model_name in ('MultiAE', 'MultiDAE'):
             self.loss = MultiAELoss()
         elif self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
             self.loss = VAELoss(args)
@@ -146,6 +157,10 @@ class AETrainer():
             # loss
             if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 batch_loss = self.loss(masked_pred, masked_interact, mean, logvar, True)
+            elif self.args.model_name in ('AE', 'DAE', 'MultiAE', 'MultiDAE') and self.confidence_standard:
+                confidence = self.confidence_array[i*interact.size(0):(i+1)*interact.size(0),:]
+                masked_confidence = confidence[all_mask]
+                batch_loss = self.loss(masked_pred, masked_interact, masked_confidence)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
             
@@ -184,6 +199,10 @@ class AETrainer():
             # loss
             if self.args.model_name in ("VAE", 'MultiVAE', "VDAE", "MultiVDAE"):
                 batch_loss = self.loss(masked_pred, masked_interact, train_mean, train_logvar, False)
+            elif self.args.model_name in ('AE', 'DAE', 'MultiAE', 'MultiDAE') and self.confidence_standard:
+                confidence = self.confidence_array[i*valid_interact.size(0):(i+1)*valid_interact.size(0),:]
+                masked_confidence = confidence[valid_all_mask]
+                batch_loss = self.loss(masked_pred, masked_interact, masked_confidence)
             else:
                 batch_loss = self.loss(masked_pred, masked_interact)
             

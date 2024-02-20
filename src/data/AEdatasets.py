@@ -1,4 +1,5 @@
 from abc import *
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,36 @@ class AEDataPipeline(DataPipeline):
         super().__init__(args)
         self.users = None
         self.items = None
+        self.confidence_array = None
+        if self.args.confidence is not None:
+            self._set_confidence_array()
 
+    def _set_confidence_array(self):
+        logger.info('set confidence array...')
+        df = self._read_data()
+        if self.args.confidence == 'None':
+            pass
+        elif self.args.confidence == 'time':
+            # calculate min, max of time
+            user_time_min = df_.groupby('user')['time'].min().to_dict()
+            user_time_max = df_.groupby('user')['time'].max().to_dict()
+            # min-max normalization
+            df_['norm_time'] = df_[['user', 'time']].apply(
+                lambda x: (x['time']-user_time_min[x['user']])/(user_time_max[x['user']]-user_time_min[x['user']]), axis=1)
+            confidence_matrix = df_.pivot('user',['item'], ['norm_time']).fillna(0).astype('float32') + 1.
+            confidence_matrix.columns = confidence_matrix.columns.droplevel(0)
+            self.confidence_array = confidence_matrix.loc[self.users,self.items].values
+
+        elif self.args.confidence == 'itempop':
+            popularity = df.value_counts('item')
+            df = df.merge(pd.DataFrame(popularity, columns=['itempop']), on='item')
+            df['itempop'] = (df['itempop']-df["itempop"].min())/(df["itempop"].max()-df["itempop"].min())
+            confidence_matrix = df.pivot('user',['item'], ['itempop']).fillna(0) + 1.
+            confidence_matrix.columns = confidence_matrix.columns.droplevel(0)
+            self.confidence_array = confidence_matrix.loc[self.users,self.items].values
+        else:
+            raise ValueError(f'{self.args.confidence} not found!')
+        
     def _feature_selection(self, df):
         logger.info('feature selection...')
         df = df[['user', 'item', 'rating']]
@@ -45,9 +75,10 @@ class AEDataPipeline(DataPipeline):
     def preprocess_data(self):
         logger.info("preprocess data...")
         df = self._read_data()
+        # self._set_confidence_array(df)
         df = self._concat_neg_data(df)
         df = self._feature_selection(df)
-        return df 
+        return df
     
     def _transform_df_to_uimatrix(self, df):
         uimatrix = df.pivot_table(index='user', columns=['item'], values=['rating'], aggfunc='first')
@@ -117,17 +148,20 @@ class AEDataPipeline(DataPipeline):
 
         train_data = {'interact': full_interact, 'interact_all_mask': train_interact_all_mask,
                       'interact_pos_mask': train_interact_pos_mask, 'pos_items': train_pos_items}
+                      #'confidence': self.confidence_array}
         valid_data = {'interact': full_interact, 'interact_all_mask': valid_interact_all_mask,
                       'interact_pos_mask': valid_interact_pos_mask, 'pos_items': valid_pos_items}
+                      #'confidence': self.confidence_array}
         full_data = {'interact': full_interact, 'interact_all_mask': full_interact_all_mask,
                       'interact_pos_mask': full_interact_pos_mask, 'pos_items': full_pos_items}
-        
+
         return train_data, valid_data, full_data
 
     def postprocessing(self, data):
         data['interact'] = data['interact'].fillna(0.5).values.astype(np.float32)
         data['interact_all_mask'] = data['interact_all_mask'].values # compare (pred * mask) with X
         data['interact_pos_mask'] = data['interact_pos_mask'].values # compare (pred * mask) with X
+        # data['confidence'] = data['confidence'].values # compare (pred * mask) with X
         return data
 
     def set_unique_users_items(self, train_data):
@@ -142,6 +176,7 @@ class AEDataset(Dataset):
         self.interact = data['interact']
         self.interact_all_mask = data['interact_all_mask']
         self.interact_pos_mask = data['interact_pos_mask']
+        #self.confidence = data['confidence']
 
     def __len__(self):
         return self.interact.shape[0]
@@ -150,3 +185,4 @@ class AEDataset(Dataset):
         return {'interact': self.interact[index], 
                 'interact_all_mask': self.interact_all_mask[index], 
                 'interact_pos_mask': self.interact_pos_mask[index]}
+                #'confidence': self.confidence[index]}
