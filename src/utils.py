@@ -52,6 +52,12 @@ def save_submission(prediction, args, runname):
     submission_df.iloc[:,:] = prediction
     submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)
 
+def save_extra_submission(prediction, args, runname):
+    logger.info("save extra submission file...")
+    submission_df = pd.read_csv('../data/eval/sample_submission.csv')
+    extra_submission_df = pd.DataFrame(prediction, columns=submission_df.columns.tolist()+['proba'])
+    extra_submission_df.to_csv(f'{args.submit_dir}/{runname}-extra-submission.csv', index=False)
+
 def save_all_scores(all_score_df, args, runname):
     logger.info("save score dataframe...")
     all_score_df.columns = all_score_df.columns.astype(str)

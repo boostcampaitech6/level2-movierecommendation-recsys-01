@@ -53,7 +53,7 @@ class AEInferencer:
             info = f.readlines()
         print(''.join(info))
 
-    def inference(self, evaluate_data, k=10):
+    def inference(self, evaluate_data, k=10, extra_k=30):
         print("Inference Start....")
         self.model.eval()
         
@@ -64,7 +64,7 @@ class AEInferencer:
         pos_mask_tensor = torch.tensor(evaluate_data['interact_pos_mask'])
 
         recommendation = []
-        prediction = []
+        extra_recommendation, extra_proba = [],[]
 
         for i, user in enumerate(tqdm(users)): 
             user_interact = interact_tensor[i,:]
@@ -77,22 +77,40 @@ class AEInferencer:
             else:
                 user_pred = self.model(user_interact).detach().cpu()
 
-            user_pred = user_pred * inv_pos_mask
+            user_pred = (user_pred * inv_pos_mask).numpy()
 
             # find high prob index
-            high_index = np.argpartition(user_pred.numpy(), -k)[-k:]
+            high_index = np.argpartition(user_pred, -k)[-k:]
 
             # find high prob item by index
             user_recom = items[high_index]
+
+            # save
             recommendation.append(user_recom)
-            prediction.append(user_pred.numpy())
+
+            # find extra high prob and high prob index
+            if extra_k is not None:
+                extra_high_index = np.argpartition(user_pred, -extra_k)[-extra_k:]
+                extra_high_prob = user_pred[extra_high_index]
+
+                extra_user_recom = items[extra_high_index]
+
+                extra_recommendation.append(extra_user_recom)
+                extra_proba.append(extra_high_prob)
 
         # expand_dims
         recommendation = np.expand_dims(np.concatenate(recommendation, axis=0), axis=-1)
-        prediction = np.array(prediction)
         user_ids = np.expand_dims(np.repeat(users, 10), axis=-1).astype(int)
 
         recommendation = np.concatenate([user_ids, recommendation], axis=1)
-        prediction = pd.DataFrame(prediction, index=users, columns=items)
 
-        return recommendation, prediction
+        if extra_k is not None:
+            extra_recommendation = np.expand_dims(np.concatenate(extra_recommendation, axis=0), axis=-1)
+            extra_proba = np.expand_dims(np.concatenate(extra_proba, axis=0), axis=-1)
+            user_ids = np.expand_dims(np.repeat(users, extra_k), axis=-1).astype(int)
+
+            extra_recommendation = np.concatenate([user_ids, extra_recommendation, extra_proba], axis=1)
+        else:
+            extra_recommendation = None
+
+        return recommendation, extra_recommendation

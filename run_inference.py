@@ -15,7 +15,7 @@ from src.data.AEdatasets import AEDataPipeline, AEDataset
 from src.inference.FMinferencer import FMInferencer
 from src.inference.AEinferencer import AEInferencer
 
-from src.utils import set_seed, create_data_path, save_submission, save_all_scores
+from src.utils import set_seed, create_data_path, save_submission, save_extra_submission
 
 import torch
 from torch.utils.data import DataLoader
@@ -50,9 +50,11 @@ def main(args: DictConfig):
     inferencer = AEInferencer(args, evaluate_data, data_pipeline, args.runname)
 
     # Inference
-    recommendation, prediction = inferencer.inference(evaluate_data)
+    if args.extra_k == 'None': args.extra_k = None
+    recommendation, extra_recommendation = inferencer.inference(evaluate_data, extra_k=args.extra_k)
     save_submission(recommendation[:, :2], args, args.runname)
-    #save_all_scores(prediction, args, args.runname)
+    if args.extra_k is not None:
+        save_extra_submission(extra_recommendation[:, :3], args, args.runname)
 
 if __name__ == '__main__':
     main()
