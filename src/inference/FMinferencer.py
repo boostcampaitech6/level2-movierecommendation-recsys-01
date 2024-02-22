@@ -4,10 +4,10 @@ from tqdm import tqdm
 
 import torch
 
-from .models.DeepFMModels import DeepFM
-from .models.FMModels import FM
+from ..models.DeepFMModels import DeepFM
+from ..models.FMModels import FM
 
-class Inferencer:
+class FMInferencer:
 
     def __init__(self, args, data_pipeline, train_dataloader, valid_dataloader, evaluate_data):
 
