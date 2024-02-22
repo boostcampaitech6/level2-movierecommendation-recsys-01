@@ -91,6 +91,6 @@ class FM(nn.Module):
 
         # concat results
         y = bias_term + self.fm(x_fm)
-        y = torch.sigmoid(y)
+        # y = torch.sigmoid(y) # BCE Loss -> BPR Loss 로 변경하며 sigmoid 제거
 
         return y.unsqueeze(-1)

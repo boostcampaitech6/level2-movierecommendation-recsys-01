@@ -16,10 +16,11 @@ from tqdm import tqdm
 import torch
 import wandb
 
+from src.models.WDNModels import WideAndDeep
+
 from ..models.DeepFMModels import DeepFM
 from ..models.FMModels import FM
 from ..metrics import recall_at_k, ndcg_k
-from ..data.features import make_year
 
 import logging
 logger = logging.getLogger(__name__)
@@ -42,12 +43,14 @@ class FMTrainer():
             self.model = FM(self.num_features, self.cat_features_size, self.args.emb_dim)
         elif self.args.model_name == "DeepFM":
             self.model = DeepFM(self.num_features, self.cat_features_size, self.args.emb_dim, mlp_dims=[200, 200, 200], drop_rate=0.1)
+        elif self.args.model_name in ('WDN',):
+            self.model = WideAndDeep(self.num_features, self.cat_features_size, self.args.emb_dim, self.args.mlp_dims, self.args.cross_feature)
         else:
             raise Exception
 
         self.model.to(self.device)
-        self.loss = torch.nn.BCELoss()
-
+        self.bce = torch.nn.BCELoss()
+        self.loss = (lambda pos, neg: -torch.mean(torch.log(torch.sigmoid(pos-neg)))) # torch.nn.BCELoss()
         self.train_actual = None
         self.valid_actual = None
         self.total_interaction = torch.tensor(evaluate_data.values).to(self.device)
@@ -58,7 +61,7 @@ class FMTrainer():
        
     def run(self, train_data_loader, valid_data_loader):
         logger.info("Run Trainer...")
-        patience = 10
+        patience = self.args.patience
         best_loss, best_epoch, endurance, best_ndcg_k, best_recall_k = 1e+9, 0, 0, 0, 0
 
         if self.args.optimizer == "adamw":
@@ -97,7 +100,7 @@ class FMTrainer():
                     }
                 )
             
-            if valid_loss < best_loss:
+            if best_recall_k < valid_recall_k:
                 best_loss, best_epoch, best_ndcg_k, best_recall_k = valid_loss, epoch, valid_ndcg_k, valid_recall_k
                 endurance = 1
 
@@ -119,7 +122,10 @@ class FMTrainer():
                 }
             )
 
-    
+    # 'positive_X': self.X[index],
+    #         'positive_y': self.positive_y[index],
+    #         'negative_X': self.y[index],
+    #         'negative_y': self.negative_y[index],
     def train(self, train_data_loader):
         logger.info("Training Start....")
         self.model.train()
@@ -127,9 +133,11 @@ class FMTrainer():
         total_X = []
 
         for i, data in enumerate(tqdm(train_data_loader)):
-            X, y = data['X'].to(self.device), data['y'].to(self.device)
-            pred = self.model(X)
-            batch_loss = self.loss(pred, y)
+            positive = data['positive_X'].to(self.device)
+            negative = data['negative_X'].to(self.device)
+            
+            positive_pred, negative_pred = self.model(positive), self.model(negative)
+            batch_loss = self.loss(positive_pred, negative_pred)
 
             self.optimizer.zero_grad()
             batch_loss.backward()
@@ -137,8 +145,15 @@ class FMTrainer():
 
             total_loss += batch_loss.item()
 
-            positive_index = torch.where(data['y'][:,0]==1)
-            total_X.append(data['X'][positive_index])
+            # pred = self.model(X)
+            # batch_loss = self.loss(pred, y)
+
+
+            # logger.info(f"[Train] {positive_pred}, {negative_pred}, {batch_loss}, {total_loss/(i+1)}")
+
+            # positive_index = torch.where(data['y'][:,0]==1)
+            # total_X.append(data['X'][positive_index])
+            total_X.append(data['positive_X'])
         
         total_loss /= len(train_data_loader)
         total_X = np.concatenate(total_X, axis=0)
@@ -155,12 +170,18 @@ class FMTrainer():
         total_X = []
 
         for _, data in enumerate(tqdm(valid_data_loader)):
-            X, y = data['X'].to(self.device), data['y'].to(self.device)
-            pred = self.model(X)
-            batch_loss = self.loss(pred, y)
+            # X, y = data['X'].to(self.device), data['y'].to(self.device)
+            # pred = self.model(X)
+            # batch_loss = self.loss(pred, y)
+
+            # positive_index = torch.where(data['y'][:,0]==1)
+            # total_X.append(data['X'][positive_index])
+            
+            positive, negative = data['positive_X'].to(self.device), data['negative_X'].to(self.device) # (user, item), (user, item)
+            positive_pred, negative_pred = self.model(positive), self.model(negative)
+            batch_loss = self.loss(positive_pred, negative_pred)
             valid_loss += batch_loss.item()
-            positive_index = torch.where(data['y'][:,0]==1)
-            total_X.append(data['X'][positive_index])
+            total_X.append(data['positive_X'])
 
         valid_loss /= len(valid_data_loader)
 
@@ -171,7 +192,7 @@ class FMTrainer():
 
         valid_recall_k, valid_ndcg_k = self.evaluate()
 
-        return valid_loss, valid_recall_k, valid_ndcg_k
+        return valid_loss, valid_ndcg_k, valid_recall_k
     
 
     # calculate recall and ndcg
@@ -200,12 +221,14 @@ class FMTrainer():
             user_pred = user_pred.squeeze(1) * user_mask # train interaction 제외
             
             # find high prob index
-            high_index = np.argpartition(user_pred.numpy(), -k)[-k:]
+            # high_index = np.argpartition(user_pred.numpy(), -k)[-k:]
+            high_index = np.argsort(user_pred.numpy())[-k:]
             # find high prob item by index
-            user_recom = user_items[high_index]
+            user_recom = user_items[high_index[::-1]]
+
             prediction.append(user_recom)
 
-        assert len(prediction) == num_users, f"prediction's length should be same as num_users({num_users}): {len(prediction)}"
+        assert len(prediction) == self.args.evaluate_size, f"prediction's length should be same as num_users({self.args.evaluate_size}): {len(prediction)}"
 
         eval_recall_k = recall_at_k(list(self.valid_actual.values()), prediction, k)
         eval_ndcg_k = ndcg_k(list(self.valid_actual.values()), prediction, k)
@@ -217,7 +240,7 @@ class FMTrainer():
         offset = len(self.num_features)
         return pd.DataFrame(X[:, offset:offset+2], columns = ['user', 'item']).groupby('user')['item'].agg(set).sort_index().to_dict()
 
-    def inference(self, k=10):
+    def inference(self, k=10, ensemble: bool=False):
         logger.info("Inference Start....")
         self.model.eval()
 
@@ -226,6 +249,7 @@ class FMTrainer():
         offset = len(self.num_features)
 
         prediction = []
+        pred_prob = []
 
         logger.info("[INFER]Predict all users and items interaction....")
         users = self.total_interaction[:, offset].unique().detach().cpu().numpy()
@@ -246,14 +270,18 @@ class FMTrainer():
             # find high prob item by index
             user_recom = user_items[high_index]
             prediction.append(user_recom)
+            if ensemble:
+                pred_prob.append(user_pred[high_index])
         
         # expand_dims
         prediction = np.expand_dims(np.concatenate(prediction, axis=0), axis=-1)
-        user_ids = np.expand_dims(np.repeat(users, 10), axis=-1).astype(int)
+        user_ids = np.expand_dims(np.repeat(users, k), axis=-1).astype(int)
+        if ensemble:
+            pred_prob = np.expand_dims(np.concatenate(pred_prob, axis=0), axis=-1)
 
         prediction = np.concatenate([user_ids, prediction], axis=1)
 
-        return prediction
+        return prediction, pred_prob
 
     def load_best_model(self):
         logger.info('load best model...')
