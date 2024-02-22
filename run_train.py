@@ -21,6 +21,7 @@ from src.data.FMdatasets import FMDataPipeline, FMDataset
 from src.data.AEdatasets import AEDataPipeline, AEDataset
 from src.train.FMtrainer import FMTrainer
 from src.train.AEtrainer import AETrainer
+from src.train.RecVAEtrainer import RecVAETrainer
 
 from src.utils import set_seed, create_data_path, save_submission
 
@@ -144,6 +145,9 @@ def main(args: DictConfig):
     if args.model_name in ('FM', 'DeepFM'):
         trainer = FMTrainer(args, evaluate_data, data_pipeline, runname)
         trainer.run(train_dataloader, valid_dataloader)
+    elif args.model_name == 'RecVAE':
+        trainer = RecVAETrainer(args, evaluate_data, data_pipeline, runname)
+        trainer.run(train_dataloader, valid_dataloader, valid_data)
     elif args.model_name.endswith('AE'):
         trainer = AETrainer(args, evaluate_data, data_pipeline, runname)
         trainer.run(train_dataloader, valid_dataloader, valid_data)
@@ -161,7 +165,7 @@ def main(args: DictConfig):
         # padding for additional categorical features except user and item
         padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
         prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
-    elif args.model_name in ('AE', 'DAE', 'VAE', 'MultiVAE', 'MultiAE', 'MultiDAE', 'MultiVDAE', 'VDAE'):
+    elif args.model_name in ('AE', 'DAE', 'VAE', 'MultiVAE', 'MultiAE', 'MultiDAE', 'MultiVDAE', 'VDAE', 'RecVAE'):
         prediction = trainer.inference(evaluate_data)
     save_submission(prediction[:, :2], args, runname)
 

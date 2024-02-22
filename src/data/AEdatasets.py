@@ -34,12 +34,12 @@ class AEDataPipeline(DataPipeline):
             pass
         elif self.args.confidence == 'time':
             # calculate min, max of time
-            user_time_min = df_.groupby('user')['time'].min().to_dict()
-            user_time_max = df_.groupby('user')['time'].max().to_dict()
+            user_time_min = df.groupby('user')['time'].min().to_dict()
+            user_time_max = df.groupby('user')['time'].max().to_dict()
             # min-max normalization
-            df_['norm_time'] = df_[['user', 'time']].apply(
+            df['norm_time'] = df[['user', 'time']].apply(
                 lambda x: (x['time']-user_time_min[x['user']])/(user_time_max[x['user']]-user_time_min[x['user']]), axis=1)
-            confidence_matrix = df_.pivot('user',['item'], ['norm_time']).fillna(0).astype('float32') + 1.
+            confidence_matrix = df.pivot('user',['item'], ['norm_time']).fillna(0).astype('float32') + 1.
             confidence_matrix.columns = confidence_matrix.columns.droplevel(0)
             self.confidence_array = confidence_matrix.loc[self.users,self.items].values
 
@@ -50,6 +50,43 @@ class AEDataPipeline(DataPipeline):
             confidence_matrix = df.pivot('user',['item'], ['itempop']).fillna(0) + 1.
             confidence_matrix.columns = confidence_matrix.columns.droplevel(0)
             self.confidence_array = confidence_matrix.loc[self.users,self.items].values
+        elif self.args.confidence == 'genreprefer':
+
+            # read genre data
+            genre_data = pd.read_csv('../data/train/genres.tsv', sep='\t')
+            # genre pivotting
+            genre_data['rating'] = 1
+            genre_df = genre_data.pivot(index='item', columns='genre', values='rating').fillna(0)
+            # genre merging
+            genre_merged_df = df.merge(genre_df, on='item')
+            # genre count by user
+            user_genre_matrix = genre_merged_df.groupby('user').sum().iloc[:,3:]
+            # genre scaling by user (-> preference)
+            user_genre_matrix = user_genre_matrix.div(user_genre_matrix.sum(axis=1), axis=0)
+
+            # 장르 컬럼 리스트 (예시 데이터에 맞게 조정)
+            genre_columns = [col for col in user_genre_matrix.columns if col not in ['user', 'item', 'time', 'itempop']]
+
+            # 1단계: 사용자별 장르 선호도를 genre_merged_df에 결합
+            # user_genre_df의 인덱스가 user_id라고 가정하고, reset_index()를 호출하여 'user' 컬럼을 생성
+            user_genre_df_reset = user_genre_matrix.reset_index()
+
+            # genre_merged_df와 user_genre_df를 'user' 컬럼을 기준으로 결합
+            merged_df = pd.merge(genre_merged_df, user_genre_df_reset, on='user', how='left', suffixes=('', '_pref'))
+
+            # 2단계: 벡터화된 연산을 사용하여 각 아이템에 대한 사용자의 장르 선호도 계산
+            # 장르별 선호도와 아이템의 장르 정보를 곱하여 새로운 'item_genre_prefer' 컬럼 생성
+            for genre in genre_columns:
+                merged_df[genre + '_prefer'] = merged_df[genre] * merged_df[genre + '_pref']
+
+            # 선택적: 장르 선호도의 합을 계산하여 각 아이템에 대한 총 선호도를 나타내는 컬럼 추가
+            merged_df['total_genre_prefer'] = merged_df[[genre + '_prefer' for genre in genre_columns]].sum(axis=1)
+
+            confidence_matrix = merged_df.pivot('user',['item'], ['total_genre_prefer']).fillna(0) + 1.
+            confidence_matrix.columns = confidence_matrix.columns.droplevel(0)
+            self.confidence_array = confidence_matrix.loc[self.users,self.items].values
+
+
         else:
             raise ValueError(f'{self.args.confidence} not found!')
         
