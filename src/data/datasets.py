@@ -7,17 +7,11 @@ import numpy as np
 import pandas as pd
 
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
-
-import torch
-from torch.utils.data import Dataset
 
 import logging
 logger = logging.getLogger(__name__)
 
-from .features import (
-    make_writer, make_director, make_genre, make_title, make_year
-)
+from . import features
 
 class DataPipeline:
 
@@ -71,11 +65,16 @@ class DataPipeline:
     
     def _feature_engineering(self, df):
         logger.info('feature engineering...')
-        make_year(df)
-        make_director(df)
-        make_genre(df)
-        make_title(df)
-        make_writer(df)
+        features_attributes = dir(features)
+        use_features = [key for key, value in self.args.feature_sets.items() if value[0] == 1]
+        for feature in use_features:
+            if feature in ('user', 'item', 'time'): # skip for user and item and time
+                continue
+            if feature not in features_attributes:
+                logger.error(f"[ERROR] '{feature}' make method is not in features.py module...")
+                raise ValueError
+            make_feature = getattr(features, feature)
+            make_feature(df)
         return df
     
     def _feature_selection(self, df):
@@ -96,6 +95,10 @@ class DataPipeline:
 
     @abstractmethod
     def preprocess_data(self):
+        pass
+
+    @abstractmethod
+    def split_data(self, data):
         pass
 
     def save_data(self, data, data_name):
@@ -146,37 +149,3 @@ class DataPipeline:
         df[num_features] = scaler.fit_transform(df[num_features])
 
         return df
-
-    @abstractmethod
-    def split_data(self, data):
-        pass
-    
-    def _input_of_total_user_item(self):
-        num_users = len(self.users)
-        num_items = len(self.items)
-        
-        # Create user-item interaction matrix
-        logger.info("Make base users and items interaction....")
-        users = self.users[:, None]
-        items = self.items[None, :]
-        data = np.column_stack(
-            (np.repeat(users, num_items, axis=1).flatten(), np.tile(items, (num_users, 1)).flatten())
-        )
-
-        # Convert to DataFrame
-        data = pd.DataFrame(data, columns=['user', 'item'])
-
-        assert len(data) == (num_users * num_items), f"Total Interaction이 부족합니다: {len(data)}"
-
-        logger.info("Map side informations...")
-
-        # mapping side informations - 6 minutes...
-        make_year(data)
-
-        # ordering
-        logger.info("Ordering numeric and categorical features...")
-        num_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'N']]
-        cat_features = [name for name, options in self.args.feature_sets.items() if options == [1, 'C']]
-        data = pd.concat([data[num_features], data[cat_features]], axis=1)
-
-        return data
