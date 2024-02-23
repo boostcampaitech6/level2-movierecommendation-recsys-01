@@ -3,35 +3,44 @@
 - 매트릭: Recall@10
 - 데이터: MovieLens 데이터를 implicit feedback으로 변형
 	- test 데이터는 public: private=50: 50 으로 분할
-- 실험관리: [[ link ]]
-- 데이터 관리: [[ dvc remote ]]
+- 실험관리: [실험관리](https://petite-giant-ce3.notion.site/9454685597b241d087b4fc0daae49147?pvs=25)
+- 피처관리: [피처관리](https://petite-giant-ce3.notion.site/Feature-Engineering-3b25a82baffe4bc992ae3ad9722bade8?pvs=4)
 
 # directory Hierarchy
 ```
 .
 ├── README.md
+├── ae-dataset.ipynb
 ├── ensemble.py
+├── fm-test.ipynb
+├── outputs
+│   ├── datasets
+│   ├── models
+│   └── submissions
 ├── requirements.txt
 ├── run_inference.py
 ├── run_train.py
-└── src
-    ├── configs
-    ├── data
-    ├── ensembles.py
-    ├── loss.py
-    ├── metrics.py
-    ├── models
-    ├── trainer.py
-    └── utils.py
+├── src
+│   ├── __init__.py
+│   ├── configs
+│   ├── data
+│   ├── ensembles.py
+│   ├── inference
+│   ├── loss.py
+│   ├── metrics.py
+│   ├── models
+│   ├── train
+│   └── utils.py
+└── test.py
 
-4 directories, 10 files
+10 directories, 13 files
 ```
 
 # Implemented
 
 ## Models
-- DeepFM
-- ...
+- FM/DeepFM
+- AE/DAE/VAE/RecVAE
 
 ## Features
 - ...
@@ -42,7 +51,7 @@
 prerequisites
 - conda
 - git
-- torch [[ official homepage ]]
+- [torch](https://pytorch.org/#:~:text=Aid%20to%20Ukraine.-,INSTALL,-PYTORCH)
 
 1. settings
 ```
@@ -72,7 +81,7 @@ python run_train.py
 3. inference
 ```
 # inference
-vi src/configs/infer_config.yaml
+vi src/configs/inference_config.yaml
 # inference
 python run_inference.py
 ```
