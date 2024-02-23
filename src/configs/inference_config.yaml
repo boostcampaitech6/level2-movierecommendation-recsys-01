@@ -1,0 +1,37 @@
+# run config
+seed:       42
+device:     'cuda'
+runname:    MultiDAE_240219-200258
+model_dir:  outputs/models
+submit_dir: outputs/submissions
+data_dir:   outputs/datasets
+batch_size: 2048
+extra_k:    30
+
+# data config
+neg_count:  100
+feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Numeric)]
+    'user':     [1,C],
+    'item':     [1,C],
+    'time':     [0,N],
+    'year':     [0,N], # 1-neg, 0-all
+    'writer':   [0,C],
+    'title':    [0,C],
+    'genre':    [0,C],
+    'director': [0,C],
+}
+
+# model config
+model_name: MultiDAE # FM, DeepFM, AE, DAE, VAE, MultiVAE, MultiAE, MultiDAE, MultiVDAE, VDAE
+emb_dim:    64
+latent_dim: 256
+encoder_dims: [1024, 512]
+
+# 영향을 주지 않음
+confidence: None
+dropout:        0.5
+noise_factor:   0.3     # only DAE
+kl_anneal:          False   # True/False
+anneal_beta_max:    .2      # 아래 조건이 beta_max 에 막힘
+anneal_total_steps: 200000  # epoch 100까지 iter 마다 anneal을 증가시켜 1에 도달함
+
