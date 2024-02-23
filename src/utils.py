@@ -51,7 +51,14 @@ def create_data_path(args):
 
 def save_submission(prediction, args, runname):
     logger.info("save submission file...")
-    submission_df = pd.read_csv('../data/eval/sample_submission.csv')
+    if args.ensemble:
+        columns = ['user', 'item']
+        dtype = {'user': int, 'item': int}
+        columns.append('rating')
+        dtype['rating'] = float
+        submission_df = pd.DataFrame(np.zeros_like(prediction), columns=columns, dtype=dtype)
+    else:
+        submission_df = pd.read_csv('../data/eval/sample_submission.csv')
     submission_df.iloc[:,:] = prediction
     submission_df.to_csv(f'{args.submit_dir}/{runname}-submission.csv', index=False)
 

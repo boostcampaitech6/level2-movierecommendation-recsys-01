@@ -1,52 +1,88 @@
 # run config
 seed:       42
-epochs:     500
-batch_size: 32 #64
-lr:         0.0001
+epochs:     10
+batch_size: 32
+lr:         0.001
 optimizer:  adamw
 model_dir:  outputs/models
 submit_dir: outputs/submissions
 data_dir:   outputs/datasets
-device: cuda # cpu
-
-# data config
-neg_count:  100
-feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Numeric)]
-    'user':     [1,C],
-    'item':     [1,C],
-    'time':     [0,N], # AE confidence ?
-    'year':     [0,N],
-    'writer':   [0,C],
-    'title':    [0,C],
-    'genre':    [0,C],
-    'director': [0,C],
-}
-data_rebuild: False # True, False
-
-# model config
-model_name: DAE # FM, DeepFM, AE, DAE, VAE, MultiVAE, MultiAE, MultiDAE, MultiVDAE
-
-# FM
-emb_dim:    64
-
-# AE
-latent_dim: 256
-encoder_dims: [1024, 512]
-confidence: 'itempop' # time, itempop, gerneprefer
-
-# DAE
-dropout:        0.5
-noise_factor:   0.3     # only DAE
-
-# VAE
-kl_anneal:          False   # True/False
-beta_fix:           1.3
-anneal_beta_max:    .2      # 아래 조건이 beta_max 에 막힘
-anneal_total_steps: 200000  # epoch 100까지 iter 마다 anneal을 증가시켜 1에 도달함
+device:     cuda # cpu
+patience:   5
+top_n:      10
+ensemble:   False
 
 # wandb config
 wandb:      True # True, False
 project:    movierec
+notes:      "#FM #BPR #negative-10"
 
-# logging level
+# logging
 log_dir:    logs/
+
+# model config
+model_name: FM # FM, DeepFM, WDN
+emb_dim:    64
+
+# WDN
+mlp_dims:   [200, 200, 200] # for WDN only
+cross_feature: True
+
+# data config
+neg_count:  2
+data_rebuild: False # True, False
+evaluate_size: 31360 # <= 31360
+feature_sets: { # feature: [use_flag(1: on, 0: off) , type(C: Categorical, N: Numeric)]
+    'user':                                  [1,C], # 1
+    'item':                                  [1,C], # 2
+    'time':                                  [0,N], # 3
+    'year':                                  [0,N], # 4
+    'writer':                                [0,C], # 5
+    'title':                                 [0,C], # 6
+    'genre':                                 [0,C], # 7
+    'director':                              [0,C], # 8
+    'era':                                   [1,C], # 9
+    'user_review_count':                     [0,N], # 10
+    'user_movie_count':                      [0,N], # 11
+    'movie_user_count':                      [0,N], # 12
+    'movie_user_count_category':             [0,C], # 13
+    'user_movie_count_category':             [0,C], # 14
+    'item_review_count':                     [0,N], # 15
+    'item_review_count_category':            [0,C], # 16
+    'last_review_time':                      [0,N], # 17
+    'first_review_time':                     [0,N], # 18
+    'oldest_year':                           [0,N], # 19
+    'newest_year':                           [0,N], # 20
+    'highest_year':                          [0,N], # 21
+    'year_review_count':                     [0,N], # 22
+    'year_user_count':                       [0,N], # 23
+    'year_user_count_category':              [0,C], # 24
+    'year_movie_count':                      [0,N], # 25
+    'year_movie_count_category':             [0,C], # 26
+    'time_diff':                             [0,N], # 27
+    'date':                                  [0,C], # 28
+    'review_year':                           [0,N], # 29
+    'month':                                 [0,N], # 30
+    'day':                                   [0,N], # 31
+    'day_of_week':                           [0,C], # 32
+    'movie_first_review_year':               [0,N], # 33
+    'movie_last_review_year':                [0,N], # 34
+    'movie_most_review_year':                [0,N], # 35
+    'review_year_movie_count':               [0,N], # 36
+    'review_year_movie_count_category':      [0,C], # 37
+    'user_writer_count':                     [0,N], # 38
+    'writer_user_count':                     [0,N], # 39
+    'user_writer_count_category':            [0,C], # 40
+    'writer_user_count_category':            [0,C], # 41
+    'user_genre_count':                      [0,N], # 42
+    'genre_user_count':                      [0,N], # 43
+    'user_genre_count_category':             [0,C], # 44
+    'genre_user_count_category':             [0,C], # 45
+    'user_genre_review_count':               [0,N], # 46
+    'user_most_review_genre':                [0,C], # 47
+    'user_least_review_genre':               [0,C], # 48
+    'user_director_count':                   [0,C], # 49
+    'director_user_count':                   [0,C], # 50
+    'user_director_count_category':          [0,C], # 51
+    'director_user_count_category':          [0,C], # 52
+}

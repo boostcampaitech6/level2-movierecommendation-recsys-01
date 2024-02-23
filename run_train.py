@@ -19,13 +19,23 @@ from omegaconf import DictConfig
 
 from src.data.FMdatasets import FMDataPipeline, FMDataset
 from src.data.AEdatasets import AEDataPipeline, AEDataset
+from src.data.datasets import (
+    DataPipeline,
+    )
+from src.data.FMdatasets import (
+    FMDataPipeline, FMDataset,
+    ) 
+from src.data.WDNdatasets import (
+    WDNDataPipeline, WDNDataset
+)
+
 from src.train.FMtrainer import FMTrainer
 from src.train.AEtrainer import AETrainer
 from src.train.RecVAEtrainer import RecVAETrainer
 
+from src.train.WDNtrainer import WDNTrainer
 from src.utils import set_seed, create_data_path, save_submission
 
-import torch
 from torch.utils.data import DataLoader
 
 import wandb
@@ -65,14 +75,14 @@ def main(args: DictConfig):
     # wandb init
     if args.wandb:
         logging.info("wandb init...")
-        wandb.init(project=args.project, config=dict(args), name=runname)
+        wandb.init(project=args.project, config=dict(args), name=runname, notes=args.notes)
 
     # seed
     set_seed(args.seed)
 
     # create data_path
     data_path, train_path, valid_path, evaluate_path = create_data_path(args)
-    if args.model_name in ('FM', 'DeepFM'):
+    if args.model_name in ('FM', 'DeepFM', 'WDN',):
         data_pipeline = FMDataPipeline(args)
     elif args.model_name.endswith('AE'):
         data_pipeline = AEDataPipeline(args)
@@ -88,7 +98,7 @@ def main(args: DictConfig):
 
         data_pipeline.save_data(train_data, train_path)
         data_pipeline.save_data(valid_data, valid_path)
-        if args.model_name in ('FM', 'DeepFM'):
+        if args.model_name in ('FM', 'DeepFM', 'WDN',):
             data_pipeline.save_data_parquet(evaluate_data, evaluate_path)
         else:
             data_pipeline.save_data(evaluate_data, evaluate_path)
@@ -96,17 +106,20 @@ def main(args: DictConfig):
         logging.info("using saved datasets...")
         train_data = data_pipeline.load_data(train_path)
         valid_data = data_pipeline.load_data(valid_path)
-        if args.model_name in ('FM', 'DeepFM'):
+        if args.model_name in ('FM', 'DeepFM', 'WDN',):
             evaluate_data = data_pipeline.load_data_parquet(evaluate_path)
         else:
             evaluate_data = data_pipeline.load_data(evaluate_path)
 
-    if args.model_name in ('fm', 'deepfm'):
+    if args.model_name in ('FM', 'DeepFM', 'WDN', ):
         # ordinal encoding
         logging.info("encode categorical features...")
         cat_features = [name for name, options in args.feature_sets.items() if options == [1, 'C']]
         train_data['X'] = data_pipeline.encode_categorical_features(train_data['X'], cat_features)
         valid_data['X'] = data_pipeline.encode_categorical_features(valid_data['X'], cat_features)
+        if args.model_name in ('FM', 'DeepFM','WDN',):
+            train_data['y'] = data_pipeline.encode_categorical_features(train_data['y'], cat_features)
+            valid_data['y'] = data_pipeline.encode_categorical_features(valid_data['y'], cat_features)
         evaluate_data = data_pipeline.encode_categorical_features(evaluate_data, cat_features)
 
         # scaling
@@ -145,10 +158,10 @@ def main(args: DictConfig):
         logging.info("make DataLoader...")
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
         valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size)
-    
+
     # Trainer 
     logging.info("make Trainer...")
-    if args.model_name in ('FM', 'DeepFM'):
+    if args.model_name in ('FM', 'DeepFM', 'WDN'):
         trainer = FMTrainer(args, evaluate_data, data_pipeline, runname)
         trainer.run(train_dataloader, valid_dataloader)
     elif args.model_name == 'RecVAE':
@@ -160,20 +173,30 @@ def main(args: DictConfig):
     else:
         raise ValueError()
 
+    try:
+        trainer.run(train_dataloader, valid_dataloader)
+    except KeyboardInterrupt:
+        logger.info("[STOP] Stopping during training...")
+    
     # Load Best Model
     logging.info("using saved datasets...")
     trainer.load_best_model()
 
     # Inference
     logging.info("using saved datasets...")
-    if args.model_name in ('fm', 'deepfm'):
-        prediction = trainer.inference()
+    if args.model_name in ('FM', 'DeepFM'):
+        # padding for additional categorical features except user and item
+        prediction, prob = trainer.inference(k=args.top_n, ensemble=args.ensemble)
         # padding for additional categorical features except user and item
         padding = np.zeros(shape=(len(prediction), (len(cat_features) - 2)))
         prediction = data_pipeline.decode_categorical_features(np.concatenate((prediction, padding), axis=1))
     elif args.model_name in ('AE', 'DAE', 'VAE', 'MultiVAE', 'MultiAE', 'MultiDAE', 'MultiVDAE', 'VDAE', 'RecVAE'):
         prediction = trainer.inference(evaluate_data)
-    save_submission(prediction[:, :2], args, runname)
+    
+    prediction = prediction[:, :2]
+    if args.ensemble:
+        prediction = np.concatenate([prediction, prob], axis=1)
+    save_submission(prediction, args, runname)
 
     # wandb finish
     if args.wandb:
